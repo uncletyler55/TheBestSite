@@ -1,12 +1,603 @@
 <!DOCTYPE html>
-<html>
+<html lang="en">
 <head>
-<tittle>Page Title</title>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>J.A.R.V.I.S. // Global Crisis Monitor</title>
+<style>
+  :root {
+    --cyan: #35e6ff;
+    --cyan-dim: #0c6d7d;
+    --amber: #ffb347;
+    --red: #ff4d5e;
+    --bg: #02060c;
+    --panel: rgba(9, 24, 38, 0.55);
+    --grid: rgba(53, 230, 255, 0.12);
+    --glow: 0 0 12px rgba(53, 230, 255, 0.55);
+  }
+  * { margin: 0; padding: 0; box-sizing: border-box; }
+  html, body { height: 100%; }
+  body {
+    background:
+      radial-gradient(ellipse at 50% 40%, #06141f 0%, #02060c 70%, #010308 100%);
+    color: var(--cyan);
+    font-family: "Segoe UI", "Rajdhani", "Consolas", monospace;
+    overflow: hidden;
+    height: 100vh;
+    letter-spacing: 0.06em;
+  }
+  /* animated scanline overlay */
+  body::after {
+    content: "";
+    position: fixed; inset: 0; pointer-events: none; z-index: 999;
+    background: repeating-linear-gradient(
+      to bottom,
+      rgba(53, 230, 255, 0.03) 0px,
+      rgba(53, 230, 255, 0.03) 1px,
+      transparent 2px,
+      transparent 4px);
+    mix-blend-mode: screen;
+  }
+
+  .hud {
+    display: grid;
+    grid-template-columns: 320px 1fr 320px;
+    grid-template-rows: 64px 1fr 88px;
+    gap: 14px;
+    height: 100vh;
+    padding: 14px;
+  }
+
+  /* ---------- Header ---------- */
+  header {
+    grid-column: 1 / -1;
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    padding: 0 22px;
+    border: 1px solid var(--grid);
+    background: var(--panel);
+    clip-path: polygon(0 0, calc(100% - 20px) 0, 100% 20px, 100% 100%, 20px 100%, 0 calc(100% - 20px));
+    backdrop-filter: blur(3px);
+  }
+  .brand { display: flex; align-items: baseline; gap: 14px; }
+  .brand h1 {
+    font-size: 22px; font-weight: 700; letter-spacing: 0.35em;
+    text-shadow: var(--glow);
+  }
+  .brand .sub { font-size: 11px; color: var(--cyan-dim); letter-spacing: 0.25em; }
+  .status-strip { display: flex; gap: 26px; align-items: center; font-size: 12px; }
+  .status-strip .item { display: flex; align-items: center; gap: 8px; color: #9fdfe9; }
+  .dot { width: 8px; height: 8px; border-radius: 50%; background: var(--cyan); box-shadow: var(--glow); animation: pulse 2s infinite; }
+  .dot.red { background: var(--red); box-shadow: 0 0 12px var(--red); }
+  .dot.amber { background: var(--amber); box-shadow: 0 0 12px var(--amber); }
+  @keyframes pulse { 0%,100% { opacity: 1; } 50% { opacity: 0.35; } }
+
+  /* ---------- Panels ---------- */
+  .panel {
+    border: 1px solid var(--grid);
+    background: var(--panel);
+    backdrop-filter: blur(3px);
+    padding: 16px;
+    position: relative;
+    overflow: hidden;
+    clip-path: polygon(0 0, calc(100% - 16px) 0, 100% 16px, 100% 100%, 16px 100%, 0 calc(100% - 16px));
+  }
+  .panel h2 {
+    font-size: 12px; font-weight: 600; letter-spacing: 0.28em;
+    color: var(--cyan); margin-bottom: 14px; padding-bottom: 8px;
+    border-bottom: 1px solid var(--grid); text-transform: uppercase;
+    display: flex; justify-content: space-between; align-items: center;
+  }
+  .panel h2 span { color: var(--cyan-dim); font-size: 10px; }
+
+  .col-left, .col-right { display: flex; flex-direction: column; gap: 14px; }
+
+  /* ---------- Clock / Location ---------- */
+  #localTime { font-size: 44px; font-weight: 700; text-shadow: var(--glow); line-height: 1; font-variant-numeric: tabular-nums; }
+  #localDate { font-size: 12px; color: #9fdfe9; margin-top: 6px; letter-spacing: 0.18em; }
+  .loc-line { font-size: 12px; color: var(--cyan-dim); margin-top: 12px; display: flex; justify-content: space-between; }
+  .loc-line b { color: #cdeff6; font-weight: 500; }
+  .worldclocks { margin-top: 14px; display: flex; flex-direction: column; gap: 6px; font-size: 12px; }
+  .worldclocks .wc { display: flex; justify-content: space-between; color: #8fc9d6; }
+  .worldclocks .wc time { color: #d9f6fb; font-variant-numeric: tabular-nums; }
+
+  /* ---------- Weather ---------- */
+  .wx-main { display: flex; align-items: center; gap: 16px; }
+  .wx-icon { font-size: 46px; filter: drop-shadow(0 0 8px rgba(53,230,255,0.5)); }
+  .wx-temp { font-size: 40px; font-weight: 700; text-shadow: var(--glow); font-variant-numeric: tabular-nums; }
+  .wx-desc { font-size: 12px; color: #9fdfe9; margin-top: 2px; letter-spacing: 0.12em; }
+  .wx-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 10px 14px; margin-top: 16px; font-size: 12px; }
+  .wx-grid .cell { border: 1px solid var(--grid); padding: 8px 10px; clip-path: polygon(0 0,100% 0,100% 100%,10px 100%,0 calc(100% - 10px)); }
+  .wx-grid .cell label { display: block; color: var(--cyan-dim); font-size: 10px; letter-spacing: 0.18em; margin-bottom: 3px; }
+  .wx-grid .cell b { font-size: 15px; color: #d9f6fb; font-weight: 600; }
+
+  /* ---------- Globe ---------- */
+  .globe-wrap { position: relative; display: flex; align-items: center; justify-content: center; }
+  #globe { display: block; width: 100%; height: 100%; }
+  .globe-title {
+    position: absolute; top: 16px; left: 20px; font-size: 12px; letter-spacing: 0.28em; z-index: 3;
+    color: var(--cyan); text-shadow: var(--glow);
+  }
+  .globe-title span { display: block; font-size: 10px; color: var(--cyan-dim); margin-top: 4px; }
+  .corner { position: absolute; width: 22px; height: 22px; border: 2px solid var(--cyan); opacity: 0.6; z-index: 3; }
+  .corner.tl { top: 10px; left: 10px; border-right: none; border-bottom: none; }
+  .corner.tr { top: 10px; right: 10px; border-left: none; border-bottom: none; }
+  .corner.bl { bottom: 10px; left: 10px; border-right: none; border-top: none; }
+  .corner.br { bottom: 10px; right: 10px; border-left: none; border-top: none; }
+
+  /* ---------- Threat feed ---------- */
+  .feed { display: flex; flex-direction: column; gap: 8px; font-size: 12px; max-height: 100%; overflow: hidden; }
+  .feed .row {
+    display: grid; grid-template-columns: 14px 1fr auto; gap: 10px; align-items: center;
+    padding: 8px 10px; border: 1px solid var(--grid);
+    clip-path: polygon(0 0,100% 0,100% 100%,10px 100%,0 calc(100% - 10px));
+    transition: background 0.3s;
+  }
+  .feed .row:hover { background: rgba(53,230,255,0.08); }
+  .feed .row .lv { width: 9px; height: 9px; border-radius: 50%; }
+  .feed .row .loc { color: #d9f6fb; }
+  .feed .row .loc small { display: block; color: var(--cyan-dim); font-size: 10px; letter-spacing: 0.1em; }
+  .feed .row .sev { font-size: 10px; padding: 2px 7px; border: 1px solid; letter-spacing: 0.14em; }
+  .sev.critical { color: var(--red); border-color: var(--red); }
+  .sev.high { color: var(--amber); border-color: var(--amber); }
+  .sev.watch { color: var(--cyan); border-color: var(--cyan-dim); }
+  .lv.critical { background: var(--red); box-shadow: 0 0 10px var(--red); animation: pulse 1.2s infinite; }
+  .lv.high { background: var(--amber); box-shadow: 0 0 10px var(--amber); }
+  .lv.watch { background: var(--cyan); box-shadow: var(--glow); }
+
+  /* ---------- Footer ---------- */
+  footer {
+    grid-column: 1 / -1;
+    border: 1px solid var(--grid);
+    background: var(--panel);
+    backdrop-filter: blur(3px);
+    display: flex; align-items: center; justify-content: space-between;
+    padding: 0 22px; font-size: 11px; color: #8fc9d6;
+    clip-path: polygon(0 0, calc(100% - 20px) 0, 100% 20px, 100% 100%, 20px 100%, 0 calc(100% - 20px));
+  }
+  .meter { display: flex; align-items: center; gap: 10px; }
+  .meter .bar { width: 120px; height: 6px; background: rgba(53,230,255,0.12); position: relative; overflow: hidden; }
+  .meter .bar i { position: absolute; left: 0; top: 0; bottom: 0; background: linear-gradient(90deg, var(--cyan-dim), var(--cyan)); box-shadow: var(--glow); }
+  .ticker { flex: 1; margin: 0 24px; overflow: hidden; white-space: nowrap; }
+  .ticker span { display: inline-block; padding-left: 100%; animation: scroll 34s linear infinite; color: #9fdfe9; }
+  @keyframes scroll { to { transform: translateX(-100%); } }
+
+  @media (max-width: 1100px) {
+    .hud { grid-template-columns: 1fr; grid-template-rows: auto auto 60vh auto auto; overflow-y: auto; height: auto; }
+    body { overflow-y: auto; }
+    .globe-wrap { min-height: 60vh; }
+  }
+</style>
 </head>
 <body>
+<div class="hud">
 
-<h1>This is the best website on earth</h1>
-<p>This is the best website because I made it and great for class.</p>
+  <header>
+    <div class="brand">
+      <h1>J.A.R.V.I.S.</h1>
+      <div class="sub">GLOBAL&nbsp;CRISIS&nbsp;MONITOR&nbsp;//&nbsp;v2.6</div>
+    </div>
+    <div class="status-strip">
+      <div class="item"><span class="dot"></span> SATLINK ONLINE</div>
+      <div class="item"><span class="dot amber"></span> 3 ACTIVE THEATERS</div>
+      <div class="item"><span class="dot red"></span> DEFCON 3</div>
+      <div class="item" id="uptime">SYS 00:00:00</div>
+    </div>
+  </header>
 
+  <!-- LEFT COLUMN -->
+  <div class="col-left">
+    <div class="panel">
+      <h2>Local Time <span id="tzLabel">EST</span></h2>
+      <div id="localTime">--:--:--</div>
+      <div id="localDate">-- --- ----</div>
+      <div class="loc-line"><span>LOCATION</span><b id="locName">Germantown, MD</b></div>
+      <div class="loc-line"><span>COORDINATES</span><b>39.1732°N&nbsp;·&nbsp;77.2717°W</b></div>
+      <div class="worldclocks" id="worldclocks"></div>
+    </div>
+
+    <div class="panel" style="flex:1;">
+      <h2>Local Weather <span id="wxUpdated">SYNCING…</span></h2>
+      <div class="wx-main">
+        <div class="wx-icon" id="wxIcon">◌</div>
+        <div>
+          <div class="wx-temp" id="wxTemp">--°</div>
+          <div class="wx-desc" id="wxDesc">acquiring feed…</div>
+        </div>
+      </div>
+      <div class="wx-grid">
+        <div class="cell"><label>FEELS LIKE</label><b id="wxFeels">--°</b></div>
+        <div class="cell"><label>HUMIDITY</label><b id="wxHum">--%</b></div>
+        <div class="cell"><label>WIND</label><b id="wxWind">-- mph</b></div>
+        <div class="cell"><label>PRECIP</label><b id="wxPrecip">--%</b></div>
+        <div class="cell"><label>HIGH / LOW</label><b id="wxHiLo">--° / --°</b></div>
+        <div class="cell"><label>UV INDEX</label><b id="wxUV">--</b></div>
+      </div>
+    </div>
+  </div>
+
+  <!-- CENTER GLOBE -->
+  <div class="panel globe-wrap">
+    <div class="corner tl"></div><div class="corner tr"></div>
+    <div class="corner bl"></div><div class="corner br"></div>
+    <div class="globe-title">GEOSPATIAL THREAT GRID
+      <span>ORTHOGRAPHIC PROJECTION · LIVE ROTATION</span>
+    </div>
+    <canvas id="globe"></canvas>
+  </div>
+
+  <!-- RIGHT COLUMN -->
+  <div class="col-right">
+    <div class="panel" style="flex:1;">
+      <h2>Threat Register <span>PRIORITY FEED</span></h2>
+      <div class="feed" id="feed"></div>
+    </div>
+    <div class="panel">
+      <h2>Signal Analysis <span>REALTIME</span></h2>
+      <div class="wx-grid">
+        <div class="cell"><label>CHATTER VOL</label><b id="sigChatter">--</b></div>
+        <div class="cell"><label>SATS TRACKED</label><b id="sigSats">--</b></div>
+        <div class="cell"><label>DATA THRUPUT</label><b id="sigData">-- Gb/s</b></div>
+        <div class="cell"><label>THREAT IDX</label><b id="sigThreat">--</b></div>
+      </div>
+    </div>
+  </div>
+
+  <footer>
+    <div class="meter">SYSTEM INTEGRITY
+      <div class="bar"><i id="integrityBar" style="width:98%"></i></div>
+      <span id="integrityVal">98%</span>
+    </div>
+    <div class="ticker"><span id="tickerText">INITIALIZING GLOBAL FEED…</span></div>
+    <div>© STARK INDUSTRIES — SECURE TERMINAL</div>
+  </footer>
+
+</div>
+
+<script>
+/* ============================================================
+   CONFIG
+   ============================================================ */
+const HOME = { name: "Germantown, MD", lat: 39.1732, lon: -77.2717 };
+
+// Crisis / high-importance hotspots  (lat, lon, severity, label, note)
+const HOTSPOTS = [
+  { lat: 32.4279, lon: 53.6880, sev: "critical", name: "Iran",          note: "Nuclear escalation" },
+  { lat: 31.0461, lon: 34.8516, sev: "critical", name: "Israel",        note: "Active conflict zone" },
+  { lat: 33.8547, lon: 35.8623, sev: "high",     name: "Lebanon",       note: "Border tensions" },
+  { lat: 38.9072, lon: -77.0369,sev: "high",     name: "Washington DC", note: "Situation room active" },
+  { lat: 40.7128, lon: -74.0060,sev: "watch",    name: "New York, NY",  note: "Financial systems watch" },
+  { lat: 34.0522, lon: -118.2437,sev:"watch",    name: "Los Angeles",   note: "Civil advisory" },
+  { lat: 50.4501, lon: 30.5234, sev: "high",     name: "Kyiv, Ukraine", note: "Ongoing conflict" },
+  { lat: 24.7136, lon: 46.6753, sev: "watch",    name: "Riyadh",        note: "Diplomatic monitor" },
+  { lat: 39.9042, lon: 116.4074,sev: "watch",    name: "Beijing",       note: "Strategic monitor" },
+  { lat: HOME.lat, lon: HOME.lon, sev:"home",    name: "Germantown, MD",note: "Home terminal" },
+];
+
+/* ============================================================
+   GLOBE — orthographic projection on canvas
+   ============================================================ */
+const canvas = document.getElementById("globe");
+const ctx = canvas.getContext("2d");
+let W, H, R, cx, cy;
+let rot = 0;                 // rotation (radians) around polar axis
+const TILT = -0.41;          // ~23.5° axial tilt
+
+function sizeCanvas() {
+  const wrap = canvas.parentElement;
+  const dpr = window.devicePixelRatio || 1;
+  W = wrap.clientWidth; H = wrap.clientHeight;
+  canvas.width = W * dpr; canvas.height = H * dpr;
+  canvas.style.width = W + "px"; canvas.style.height = H + "px";
+  ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
+  R = Math.min(W, H) * 0.40;
+  cx = W / 2; cy = H / 2;
+}
+window.addEventListener("resize", sizeCanvas);
+sizeCanvas();
+
+// Convert lat/lon -> 3D point on unit sphere, apply rotation + tilt
+function project(lat, lon) {
+  const phi = lat * Math.PI / 180;
+  const lam = lon * Math.PI / 180 + rot;
+  // sphere coords
+  let x = Math.cos(phi) * Math.sin(lam);
+  let y = Math.sin(phi);
+  let z = Math.cos(phi) * Math.cos(lam);
+  // axial tilt around X axis
+  const cosT = Math.cos(TILT), sinT = Math.sin(TILT);
+  const y2 = y * cosT - z * sinT;
+  const z2 = y * sinT + z * cosT;
+  return {
+    x: cx + x * R,
+    y: cy - y2 * R,
+    z: z2,               // >0 = front hemisphere
+  };
+}
+
+// Simplified continent outlines (lat/lon vertex loops) for a recognizable Earth.
+const LAND = [
+  // North America
+  [[70,-165],[71,-130],[60,-95],[49,-125],[40,-124],[30,-115],[23,-106],[18,-95],[26,-80],[35,-76],[45,-67],[52,-56],[60,-64],[68,-83],[73,-100],[72,-125],[70,-165]],
+  // South America
+  [[10,-75],[5,-60],[-5,-35],[-23,-40],[-35,-55],[-52,-70],[-40,-73],[-20,-70],[-5,-81],[5,-79],[10,-75]],
+  // Europe + western Asia
+  [[71,25],[68,50],[60,60],[50,55],[45,40],[41,28],[36,15],[43,3],[48,-5],[58,5],[65,10],[71,25]],
+  // Africa
+  [[35,-6],[32,25],[15,40],[10,51],[-5,40],[-25,35],[-34,20],[-30,17],[-10,9],[5,-8],[20,-17],[35,-6]],
+  // Asia (broad)
+  [[70,60],[75,100],[70,140],[60,160],[52,140],[45,135],[35,120],[22,110],[10,98],[20,72],[30,60],[45,55],[60,60],[70,60]],
+  // India
+  [[30,70],[23,68],[8,77],[13,80],[22,89],[27,88],[30,78],[30,70]],
+  // Australia
+  [[-12,131],[-11,142],[-20,149],[-32,153],[-38,145],[-35,138],[-32,122],[-22,114],[-15,124],[-12,131]],
+];
+
+function drawGlobe() {
+  ctx.clearRect(0, 0, W, H);
+
+  // Outer atmosphere glow
+  const glow = ctx.createRadialGradient(cx, cy, R * 0.75, cx, cy, R * 1.35);
+  glow.addColorStop(0, "rgba(53,230,255,0.10)");
+  glow.addColorStop(1, "rgba(53,230,255,0)");
+  ctx.fillStyle = glow; ctx.beginPath();
+  ctx.arc(cx, cy, R * 1.35, 0, Math.PI * 2); ctx.fill();
+
+  // Sphere body
+  const body = ctx.createRadialGradient(cx - R*0.3, cy - R*0.3, R*0.1, cx, cy, R);
+  body.addColorStop(0, "rgba(12,40,58,0.55)");
+  body.addColorStop(1, "rgba(3,12,20,0.85)");
+  ctx.fillStyle = body;
+  ctx.beginPath(); ctx.arc(cx, cy, R, 0, Math.PI * 2); ctx.fill();
+
+  // Rim
+  ctx.strokeStyle = "rgba(53,230,255,0.55)";
+  ctx.lineWidth = 1.4;
+  ctx.beginPath(); ctx.arc(cx, cy, R, 0, Math.PI * 2); ctx.stroke();
+
+  // Graticule — meridians
+  ctx.lineWidth = 0.6;
+  for (let lon = -180; lon < 180; lon += 20) {
+    ctx.beginPath(); let started = false;
+    for (let lat = -90; lat <= 90; lat += 4) {
+      const p = project(lat, lon);
+      if (p.z >= 0) {
+        if (!started) { ctx.moveTo(p.x, p.y); started = true; }
+        else ctx.lineTo(p.x, p.y);
+      } else started = false;
+    }
+    ctx.strokeStyle = "rgba(53,230,255,0.10)"; ctx.stroke();
+  }
+  // Graticule — parallels
+  for (let lat = -60; lat <= 60; lat += 20) {
+    ctx.beginPath(); let started = false;
+    for (let lon = -180; lon <= 180; lon += 4) {
+      const p = project(lat, lon);
+      if (p.z >= 0) {
+        if (!started) { ctx.moveTo(p.x, p.y); started = true; }
+        else ctx.lineTo(p.x, p.y);
+      } else started = false;
+    }
+    ctx.strokeStyle = "rgba(53,230,255,0.10)"; ctx.stroke();
+  }
+
+  // Continents
+  ctx.lineWidth = 1.1;
+  for (const loop of LAND) {
+    ctx.beginPath(); let started = false;
+    for (const [lat, lon] of loop) {
+      const p = project(lat, lon);
+      if (p.z >= -0.02) {
+        if (!started) { ctx.moveTo(p.x, p.y); started = true; }
+        else ctx.lineTo(p.x, p.y);
+      } else started = false;
+    }
+    ctx.strokeStyle = "rgba(90,220,245,0.45)";
+    ctx.stroke();
+    // faint fill glow
+    ctx.fillStyle = "rgba(53,230,255,0.05)";
+    ctx.fill();
+  }
+
+  // Hotspots
+  const colors = { critical:"#ff4d5e", high:"#ffb347", watch:"#35e6ff", home:"#7dffb0" };
+  const pulse = (Math.sin(Date.now() / 320) + 1) / 2; // 0..1
+  for (const h of HOTSPOTS) {
+    const p = project(h.lat, h.lon);
+    if (p.z < 0) continue;                 // hidden behind globe
+    const c = colors[h.sev] || "#35e6ff";
+    const front = Math.max(0.15, p.z);     // fade near limb
+    const baseR = h.sev === "home" ? 3.5 : (h.sev === "critical" ? 4.5 : 3.5);
+
+    // vertical beam of light
+    ctx.globalAlpha = 0.5 * front;
+    const beam = ctx.createLinearGradient(p.x, p.y, p.x, p.y - 34 * front);
+    beam.addColorStop(0, c); beam.addColorStop(1, "rgba(0,0,0,0)");
+    ctx.strokeStyle = beam; ctx.lineWidth = 2;
+    ctx.beginPath(); ctx.moveTo(p.x, p.y); ctx.lineTo(p.x, p.y - 34 * front); ctx.stroke();
+
+    // pulsing halo
+    ctx.globalAlpha = (0.35 + 0.35 * pulse) * front;
+    ctx.beginPath();
+    ctx.arc(p.x, p.y, baseR + 6 + pulse * (h.sev==="critical"?9:5), 0, Math.PI*2);
+    ctx.fillStyle = c; ctx.fill();
+
+    // core
+    ctx.globalAlpha = front;
+    ctx.beginPath(); ctx.arc(p.x, p.y, baseR, 0, Math.PI*2);
+    ctx.fillStyle = c; ctx.shadowColor = c; ctx.shadowBlur = 14; ctx.fill();
+    ctx.shadowBlur = 0;
+    ctx.globalAlpha = 1;
+  }
+
+  // Sweeping scan arc
+  const sweep = (Date.now() / 2600) % (Math.PI * 2);
+  ctx.save();
+  ctx.beginPath(); ctx.arc(cx, cy, R, 0, Math.PI*2); ctx.clip();
+  const grad = ctx.createLinearGradient(
+    cx + Math.cos(sweep)*R, cy + Math.sin(sweep)*R, cx, cy);
+  grad.addColorStop(0, "rgba(53,230,255,0.22)");
+  grad.addColorStop(1, "rgba(53,230,255,0)");
+  ctx.fillStyle = grad;
+  ctx.beginPath(); ctx.moveTo(cx, cy);
+  ctx.arc(cx, cy, R, sweep, sweep + 0.5); ctx.closePath(); ctx.fill();
+  ctx.restore();
+}
+
+function animate() {
+  rot += 0.0022;
+  drawGlobe();
+  requestAnimationFrame(animate);
+}
+animate();
+
+/* ============================================================
+   CLOCKS
+   ============================================================ */
+const MONTHS = ["JAN","FEB","MAR","APR","MAY","JUN","JUL","AUG","SEP","OCT","NOV","DEC"];
+const DAYS = ["SUN","MON","TUE","WED","THU","FRI","SAT"];
+const startTime = Date.now();
+
+const WORLD = [
+  { label: "WASHINGTON", tz: "America/New_York" },
+  { label: "JERUSALEM",  tz: "Asia/Jerusalem" },
+  { label: "TEHRAN",     tz: "Asia/Tehran" },
+  { label: "KYIV",       tz: "Europe/Kyiv" },
+  { label: "ZULU (UTC)", tz: "UTC" },
+];
+
+function fmt(d, tz) {
+  return new Intl.DateTimeFormat("en-GB", {
+    hour: "2-digit", minute: "2-digit", second: "2-digit", hour12: false, timeZone: tz
+  }).format(d);
+}
+
+function tick() {
+  const now = new Date();
+  // Home local time (America/New_York)
+  const t = new Intl.DateTimeFormat("en-GB", {
+    hour: "2-digit", minute: "2-digit", second: "2-digit", hour12: false,
+    timeZone: "America/New_York"
+  }).format(now);
+  document.getElementById("localTime").textContent = t;
+
+  const parts = new Intl.DateTimeFormat("en-US", {
+    weekday: "short", day: "2-digit", month: "short", year: "numeric",
+    timeZone: "America/New_York"
+  }).formatToParts(now);
+  const get = ty => (parts.find(p => p.type === ty) || {}).value || "";
+  document.getElementById("localDate").textContent =
+    `${get("weekday").toUpperCase()} · ${get("day")} ${get("month").toUpperCase()} ${get("year")}`;
+
+  // TZ label (EST/EDT)
+  const tzName = new Intl.DateTimeFormat("en-US", { timeZone:"America/New_York", timeZoneName:"short" })
+    .formatToParts(now).find(p=>p.type==="timeZoneName");
+  document.getElementById("tzLabel").textContent = tzName ? tzName.value : "EST";
+
+  // world clocks
+  document.getElementById("worldclocks").innerHTML = WORLD.map(w =>
+    `<div class="wc"><span>${w.label}</span><time>${fmt(now, w.tz)}</time></div>`).join("");
+
+  // uptime
+  const up = Math.floor((Date.now() - startTime) / 1000);
+  const hh = String(Math.floor(up/3600)).padStart(2,"0");
+  const mm = String(Math.floor((up%3600)/60)).padStart(2,"0");
+  const ss = String(up%60).padStart(2,"0");
+  document.getElementById("uptime").textContent = `SYS ${hh}:${mm}:${ss}`;
+}
+setInterval(tick, 1000); tick();
+
+/* ============================================================
+   THREAT FEED + SIGNAL PANEL
+   ============================================================ */
+function renderFeed() {
+  const order = { critical:0, high:1, watch:2, home:3 };
+  const items = [...HOTSPOTS].filter(h => h.sev !== "home")
+    .sort((a,b) => order[a.sev]-order[b.sev]);
+  document.getElementById("feed").innerHTML = items.map(h => `
+    <div class="row">
+      <span class="lv ${h.sev}"></span>
+      <span class="loc">${h.name}<small>${h.note}</small></span>
+      <span class="sev ${h.sev}">${h.sev.toUpperCase()}</span>
+    </div>`).join("");
+}
+renderFeed();
+
+function rand(min, max, d=0){ const v = min + Math.random()*(max-min); return d? v.toFixed(d): Math.round(v); }
+function refreshSignals() {
+  document.getElementById("sigChatter").textContent = rand(60,95) + "%";
+  document.getElementById("sigSats").textContent = rand(112,138);
+  document.getElementById("sigData").textContent = rand(8,24,1) + " Gb/s";
+  document.getElementById("sigThreat").textContent = rand(61,78) + " / 100";
+  const integ = rand(94,99);
+  document.getElementById("integrityBar").style.width = integ + "%";
+  document.getElementById("integrityVal").textContent = integ + "%";
+}
+refreshSignals(); setInterval(refreshSignals, 3500);
+
+/* ============================================================
+   WEATHER  — Open-Meteo (keyless)  for Germantown, MD
+   ============================================================ */
+const WX_CODE = {
+  0:["☀️","Clear sky"],1:["🌤️","Mainly clear"],2:["⛅","Partly cloudy"],3:["☁️","Overcast"],
+  45:["🌫️","Fog"],48:["🌫️","Rime fog"],51:["🌦️","Light drizzle"],53:["🌦️","Drizzle"],
+  55:["🌧️","Dense drizzle"],61:["🌧️","Light rain"],63:["🌧️","Rain"],65:["🌧️","Heavy rain"],
+  66:["🌧️","Freezing rain"],67:["🌧️","Freezing rain"],71:["🌨️","Light snow"],73:["🌨️","Snow"],
+  75:["❄️","Heavy snow"],77:["🌨️","Snow grains"],80:["🌦️","Rain showers"],81:["🌦️","Rain showers"],
+  82:["⛈️","Violent showers"],85:["🌨️","Snow showers"],86:["🌨️","Snow showers"],
+  95:["⛈️","Thunderstorm"],96:["⛈️","Storm w/ hail"],99:["⛈️","Severe storm"]
+};
+
+async function loadWeather() {
+  const url = `https://api.open-meteo.com/v1/forecast?latitude=${HOME.lat}&longitude=${HOME.lon}`
+    + `&current=temperature_2m,relative_humidity_2m,apparent_temperature,precipitation_probability,`
+    + `weather_code,wind_speed_10m,uv_index`
+    + `&daily=temperature_2m_max,temperature_2m_min,precipitation_probability_max`
+    + `&temperature_unit=fahrenheit&wind_speed_unit=mph&precipitation_unit=inch`
+    + `&timezone=America%2FNew_York`;
+  try {
+    const res = await fetch(url);
+    if (!res.ok) throw new Error("HTTP " + res.status);
+    const d = await res.json();
+    const c = d.current, day = d.daily;
+    const code = WX_CODE[c.weather_code] || ["🌐","—"];
+    document.getElementById("wxIcon").textContent = code[0];
+    document.getElementById("wxDesc").textContent = code[1];
+    document.getElementById("wxTemp").textContent = Math.round(c.temperature_2m) + "°F";
+    document.getElementById("wxFeels").textContent = Math.round(c.apparent_temperature) + "°";
+    document.getElementById("wxHum").textContent = Math.round(c.relative_humidity_2m) + "%";
+    document.getElementById("wxWind").textContent = Math.round(c.wind_speed_10m) + " mph";
+    document.getElementById("wxPrecip").textContent = (c.precipitation_probability ?? 0) + "%";
+    document.getElementById("wxHiLo").textContent =
+      Math.round(day.temperature_2m_max[0]) + "° / " + Math.round(day.temperature_2m_min[0]) + "°";
+    document.getElementById("wxUV").textContent = (c.uv_index ?? 0).toFixed ? c.uv_index.toFixed(1) : c.uv_index;
+    const now = new Date();
+    document.getElementById("wxUpdated").textContent =
+      "SYNC " + new Intl.DateTimeFormat("en-GB",{hour:"2-digit",minute:"2-digit",timeZone:"America/New_York"}).format(now);
+    document.getElementById("locName").textContent = HOME.name;
+  } catch (e) {
+    document.getElementById("wxUpdated").textContent = "OFFLINE";
+    document.getElementById("wxDesc").textContent = "feed unavailable — retrying";
+    document.getElementById("wxIcon").textContent = "⚠️";
+  }
+}
+loadWeather();
+setInterval(loadWeather, 10 * 60 * 1000); // refresh every 10 min
+
+/* ============================================================
+   TICKER
+   ============================================================ */
+const HEADLINES = [
+  "IRAN — nuclear enrichment activity flagged CRITICAL",
+  "ISRAEL — air defense network at elevated readiness",
+  "WASHINGTON DC — national situation room convened",
+  "KYIV — front-line engagement ongoing, monitoring feeds",
+  "LEBANON — border sensor grid reports movement",
+  "NEW YORK — financial systems nominal, watch maintained",
+  `GERMANTOWN MD — home terminal secure // operator: authenticated`,
+];
+document.getElementById("tickerText").textContent = HEADLINES.join("      ✦      ") + "      ✦      ";
+</script>
 </body>
 </html>
