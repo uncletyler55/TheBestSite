@@ -1,0 +1,18 @@
+{
+  "name": "J.A.R.V.I.S. Global Crisis Monitor",
+  "short_name": "J.A.R.V.I.S.",
+  "description": "Sci-fi global crisis dashboard — live rotating globe with crisis hotspots, clickable location dossiers, an interactive J.A.R.V.I.S. console, plus local time and weather.",
+  "start_url": ".",
+  "scope": ".",
+  "display": "standalone",
+  "orientation": "any",
+  "background_color": "#02060c",
+  "theme_color": "#02060c",
+  "categories": ["news", "utilities", "productivity"],
+  "icons": [
+    { "src": "icons/icon-192.png", "sizes": "192x192", "type": "image/png", "purpose": "any" },
+    { "src": "icons/icon-512.png", "sizes": "512x512", "type": "image/png", "purpose": "any" },
+    { "src": "icons/icon-192-maskable.png", "sizes": "192x192", "type": "image/png", "purpose": "maskable" },
+    { "src": "icons/icon-512-maskable.png", "sizes": "512x512", "type": "image/png", "purpose": "maskable" }
+  ]
+}

@@ -2,8 +2,22 @@
 <html lang="en">
 <head>
 <meta charset="UTF-8">
-<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover, maximum-scale=1.0, user-scalable=no">
 <title>J.A.R.V.I.S. // Global Crisis Monitor</title>
+
+<!-- ===== Progressive Web App (installable on iPhone & Android) ===== -->
+<link rel="manifest" href="manifest.webmanifest">
+<meta name="theme-color" content="#02060c">
+<meta name="description" content="Sci-fi global crisis dashboard — live globe, crisis hotspots, interactive J.A.R.V.I.S. console, local time and weather.">
+<!-- Android / Chrome -->
+<meta name="mobile-web-app-capable" content="yes">
+<link rel="icon" type="image/png" sizes="32x32" href="icons/favicon-32.png">
+<link rel="icon" type="image/png" sizes="192x192" href="icons/icon-192.png">
+<!-- iOS / Safari -->
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+<meta name="apple-mobile-web-app-title" content="J.A.R.V.I.S.">
+<link rel="apple-touch-icon" href="icons/icon-180.png">
 <style>
   :root {
     --cyan: #35e6ff;
@@ -168,6 +182,128 @@
     body { overflow-y: auto; }
     .globe-wrap { min-height: 60vh; }
   }
+
+  /* ---------- Location detail overlay ---------- */
+  #globe { cursor: crosshair; }
+  .detail-panel {
+    position: fixed; top: 78px; right: 18px; width: 360px; max-width: calc(100vw - 36px);
+    z-index: 60; border: 1px solid var(--cyan); background: rgba(6, 20, 32, 0.92);
+    backdrop-filter: blur(6px); padding: 18px; color: var(--cyan);
+    box-shadow: 0 0 30px rgba(53,230,255,0.25);
+    clip-path: polygon(0 0, calc(100% - 18px) 0, 100% 18px, 100% 100%, 18px 100%, 0 calc(100% - 18px));
+    transform: translateX(115%); opacity: 0; transition: transform .35s ease, opacity .35s ease;
+    pointer-events: none;
+  }
+  .detail-panel.open { transform: translateX(0); opacity: 1; pointer-events: auto; }
+  .detail-close {
+    position: absolute; top: 12px; right: 14px; background: none; border: 1px solid var(--grid);
+    color: var(--cyan); width: 26px; height: 26px; cursor: pointer; font-size: 13px;
+  }
+  .detail-close:hover { background: rgba(53,230,255,0.12); }
+  .detail-name { font-size: 22px; font-weight: 700; text-shadow: var(--glow); letter-spacing: 0.06em; }
+  .detail-region { font-size: 11px; color: var(--cyan-dim); margin-top: 4px; letter-spacing: 0.14em; }
+  .detail-badge { display: inline-block; margin-top: 12px; font-size: 10px; padding: 3px 10px; border: 1px solid; letter-spacing: 0.18em; }
+  .detail-badge.critical { color: var(--red); border-color: var(--red); }
+  .detail-badge.high { color: var(--amber); border-color: var(--amber); }
+  .detail-badge.watch, .detail-badge.select { color: var(--cyan); border-color: var(--cyan-dim); }
+  .detail-badge.home { color: #7dffb0; border-color: #7dffb0; }
+  .detail-brief { margin-top: 14px; font-size: 12px; line-height: 1.6; color: #bfe8f1; border-left: 2px solid var(--cyan-dim); padding-left: 12px; }
+  .detail-actions { display: flex; gap: 10px; margin-top: 16px; }
+  .detail-actions button {
+    flex: 1; background: rgba(53,230,255,0.08); border: 1px solid var(--grid); color: var(--cyan);
+    padding: 9px; font-size: 11px; letter-spacing: 0.14em; cursor: pointer; font-family: inherit;
+  }
+  .detail-actions button:hover { background: rgba(53,230,255,0.2); box-shadow: var(--glow); }
+
+  /* ---------- Jarvis console ---------- */
+  .console-toggle {
+    position: fixed; bottom: 100px; right: 18px; z-index: 55;
+    background: rgba(6,20,32,0.9); border: 1px solid var(--cyan); color: var(--cyan);
+    padding: 12px 16px; font-family: inherit; font-size: 12px; letter-spacing: 0.16em; cursor: pointer;
+    box-shadow: 0 0 18px rgba(53,230,255,0.3); clip-path: polygon(0 0,100% 0,100% 100%,12px 100%,0 calc(100% - 12px));
+  }
+  .console-toggle:hover { background: rgba(53,230,255,0.16); }
+  .console {
+    position: fixed; bottom: 0; left: 50%; transform: translate(-50%, 105%);
+    width: 640px; max-width: calc(100vw - 24px); height: 380px; max-height: 70vh; z-index: 70;
+    background: rgba(4,14,24,0.96); border: 1px solid var(--cyan); border-bottom: none;
+    box-shadow: 0 -6px 40px rgba(53,230,255,0.25); display: flex; flex-direction: column;
+    transition: transform .4s cubic-bezier(.2,.8,.2,1);
+    clip-path: polygon(0 22px, 22px 0, calc(100% - 22px) 0, 100% 22px, 100% 100%, 0 100%);
+  }
+  .console.open { transform: translate(-50%, 0); }
+  .console-head {
+    display: flex; align-items: center; justify-content: space-between; padding: 14px 20px 12px;
+    border-bottom: 1px solid var(--grid); font-size: 12px; letter-spacing: 0.24em;
+  }
+  .console-head .jtitle { color: var(--cyan); text-shadow: var(--glow); font-weight: 700; display: flex; align-items: center; gap: 10px; }
+  .console-head .jtitle .orb { width: 12px; height: 12px; border-radius: 50%; background: radial-gradient(circle at 30% 30%, #aef6ff, var(--cyan)); box-shadow: 0 0 12px var(--cyan); animation: pulse 1.6s infinite; }
+  .console-close { background: none; border: 1px solid var(--grid); color: var(--cyan); width: 26px; height: 26px; cursor: pointer; }
+  .console-close:hover { background: rgba(53,230,255,0.12); }
+  .console-log { flex: 1; overflow-y: auto; padding: 14px 20px; font-size: 13px; line-height: 1.6; display: flex; flex-direction: column; gap: 10px; }
+  .console-log::-webkit-scrollbar { width: 6px; }
+  .console-log::-webkit-scrollbar-thumb { background: var(--cyan-dim); }
+  .msg { max-width: 88%; }
+  .msg.user { align-self: flex-end; text-align: right; color: #d9f6fb; }
+  .msg.user .bubble { background: rgba(53,230,255,0.12); border: 1px solid var(--grid); }
+  .msg.jarvis { align-self: flex-start; color: #bfe8f1; }
+  .msg .who { font-size: 9px; letter-spacing: 0.2em; color: var(--cyan-dim); margin-bottom: 4px; }
+  .msg .bubble { padding: 8px 12px; border-left: 2px solid var(--cyan); background: rgba(53,230,255,0.05); display: inline-block; text-align: left; }
+  .msg.jarvis .bubble b { color: var(--cyan); }
+  .console-chips { display: flex; gap: 8px; padding: 0 20px 10px; flex-wrap: wrap; }
+  .console-chips button {
+    background: rgba(53,230,255,0.06); border: 1px solid var(--grid); color: #9fdfe9;
+    font-family: inherit; font-size: 10px; letter-spacing: 0.1em; padding: 5px 10px; cursor: pointer;
+  }
+  .console-chips button:hover { background: rgba(53,230,255,0.18); color: var(--cyan); }
+  .console-input { display: flex; align-items: center; gap: 10px; padding: 12px 20px; border-top: 1px solid var(--grid); }
+  .console-input .prompt { color: var(--cyan); font-size: 18px; text-shadow: var(--glow); }
+  .console-input input {
+    flex: 1; background: rgba(53,230,255,0.04); border: 1px solid var(--grid); color: #d9f6fb;
+    font-family: inherit; font-size: 13px; padding: 10px 12px; letter-spacing: 0.06em; outline: none;
+  }
+  .console-input input:focus { border-color: var(--cyan); box-shadow: var(--glow); }
+  .console-input button {
+    background: rgba(53,230,255,0.12); border: 1px solid var(--cyan); color: var(--cyan);
+    font-family: inherit; font-size: 11px; letter-spacing: 0.16em; padding: 10px 16px; cursor: pointer;
+  }
+  .console-input button:hover { background: rgba(53,230,255,0.24); }
+  @media (max-width: 700px) {
+    .detail-panel { top: auto; bottom: 0; right: 0; left: 0; width: 100%; max-width: 100%; transform: translateY(115%); }
+    .detail-panel.open { transform: translateY(0); }
+    .console-toggle { bottom: 12px; }
+  }
+
+  /* ---------- Install (PWA) ---------- */
+  .install-btn {
+    position: fixed; bottom: 100px; left: 18px; z-index: 55;
+    background: rgba(6,20,32,0.9); border: 1px solid var(--amber); color: var(--amber);
+    padding: 12px 16px; font-family: inherit; font-size: 12px; letter-spacing: 0.16em; cursor: pointer;
+    box-shadow: 0 0 18px rgba(255,179,71,0.3); clip-path: polygon(0 0,100% 0,100% 100%,12px 100%,0 calc(100% - 12px));
+    animation: pulse 2.4s infinite;
+  }
+  .install-btn:hover { background: rgba(255,179,71,0.16); }
+  .ios-hint {
+    position: fixed; left: 50%; bottom: 20px; transform: translateX(-50%) translateY(140%);
+    z-index: 80; width: 340px; max-width: calc(100vw - 24px);
+    background: rgba(6,20,32,0.97); border: 1px solid var(--cyan); color: #cdeff6;
+    padding: 16px 18px; font-size: 13px; line-height: 1.6;
+    box-shadow: 0 0 30px rgba(53,230,255,0.3); transition: transform .4s ease;
+    clip-path: polygon(0 14px,14px 0,calc(100% - 14px) 0,100% 14px,100% 100%,0 100%);
+  }
+  .ios-hint.show { transform: translateX(-50%) translateY(0); }
+  .ios-hint b { color: var(--cyan); }
+  .ios-hint .share { display: inline-block; border: 1px solid var(--cyan); border-radius: 4px; padding: 0 5px; }
+  .ios-hint button {
+    margin-top: 12px; width: 100%; background: rgba(53,230,255,0.12); border: 1px solid var(--cyan);
+    color: var(--cyan); padding: 9px; font-family: inherit; font-size: 11px; letter-spacing: 0.16em; cursor: pointer;
+  }
+  /* honor iPhone safe areas in standalone mode */
+  @supports (padding: env(safe-area-inset-top)) {
+    .hud { padding-top: calc(14px + env(safe-area-inset-top));
+           padding-bottom: calc(14px + env(safe-area-inset-bottom)); }
+    .console-toggle, .install-btn { bottom: calc(100px + env(safe-area-inset-bottom)); }
+  }
 </style>
 </head>
 <body>
@@ -255,6 +391,58 @@
 
 </div>
 
+<!-- ============ LOCATION DETAIL OVERLAY ============ -->
+<div class="detail-panel" id="detail">
+  <button class="detail-close" id="detailClose">✕</button>
+  <div class="detail-name" id="dName">—</div>
+  <div class="detail-region" id="dRegion">—</div>
+  <div id="dBadge"></div>
+  <div class="wx-grid" style="margin-top:16px;">
+    <div class="cell"><label>COORDINATES</label><b id="dCoords">—</b></div>
+    <div class="cell"><label>LOCAL TIME</label><b id="dTime">—</b></div>
+    <div class="cell"><label>CONDITIONS</label><b id="dCond">—</b></div>
+    <div class="cell"><label>TEMPERATURE</label><b id="dTemp">—</b></div>
+    <div class="cell"><label>WIND</label><b id="dWind">—</b></div>
+    <div class="cell"><label>HUMIDITY</label><b id="dHum">—</b></div>
+  </div>
+  <div class="detail-brief" id="dBrief">Select a point on the globe to begin analysis.</div>
+  <div class="detail-actions">
+    <button id="dFocus">◎ RE-CENTER</button>
+    <button id="dAsk">🛰 ASK J.A.R.V.I.S.</button>
+  </div>
+</div>
+
+<!-- ============ INSTALL (PWA) ============ -->
+<button class="install-btn" id="installBtn" hidden>⬇ INSTALL APP</button>
+<div class="ios-hint" id="iosHint">
+  Install <b>J.A.R.V.I.S.</b> on your device: tap the <span class="share">Share ⬆</span> button in Safari,
+  then choose <b>“Add to Home Screen.”</b> It will launch full-screen like a native app.
+  <button id="iosHintClose">GOT IT</button>
+</div>
+
+<!-- ============ JARVIS CONSOLE ============ -->
+<button class="console-toggle" id="consoleToggle">⌨ J.A.R.V.I.S. CONSOLE</button>
+<div class="console" id="console">
+  <div class="console-head">
+    <div class="jtitle"><span class="orb"></span> J.A.R.V.I.S. INTERACTIVE</div>
+    <button class="console-close" id="consoleClose">✕</button>
+  </div>
+  <div class="console-log" id="consoleLog"></div>
+  <div class="console-chips" id="consoleChips">
+    <button data-cmd="status">Sitrep</button>
+    <button data-cmd="threats">List threats</button>
+    <button data-cmd="weather">Weather</button>
+    <button data-cmd="time in tehran">Time in Tehran</button>
+    <button data-cmd="focus iran">Focus Iran</button>
+    <button data-cmd="help">Help</button>
+  </div>
+  <form class="console-input" id="consoleForm">
+    <span class="prompt">›</span>
+    <input id="consoleInput" type="text" autocomplete="off" placeholder="Ask J.A.R.V.I.S. — e.g. 'weather in Israel', 'focus Kyiv', 'status'…">
+    <button type="submit">SEND</button>
+  </form>
+</div>
+
 <script>
 /* ============================================================
    CONFIG
@@ -263,16 +451,26 @@ const HOME = { name: "Germantown, MD", lat: 39.1732, lon: -77.2717 };
 
 // Crisis / high-importance hotspots  (lat, lon, severity, label, note)
 const HOTSPOTS = [
-  { lat: 32.4279, lon: 53.6880, sev: "critical", name: "Iran",          note: "Nuclear escalation" },
-  { lat: 31.0461, lon: 34.8516, sev: "critical", name: "Israel",        note: "Active conflict zone" },
-  { lat: 33.8547, lon: 35.8623, sev: "high",     name: "Lebanon",       note: "Border tensions" },
-  { lat: 38.9072, lon: -77.0369,sev: "high",     name: "Washington DC", note: "Situation room active" },
-  { lat: 40.7128, lon: -74.0060,sev: "watch",    name: "New York, NY",  note: "Financial systems watch" },
-  { lat: 34.0522, lon: -118.2437,sev:"watch",    name: "Los Angeles",   note: "Civil advisory" },
-  { lat: 50.4501, lon: 30.5234, sev: "high",     name: "Kyiv, Ukraine", note: "Ongoing conflict" },
-  { lat: 24.7136, lon: 46.6753, sev: "watch",    name: "Riyadh",        note: "Diplomatic monitor" },
-  { lat: 39.9042, lon: 116.4074,sev: "watch",    name: "Beijing",       note: "Strategic monitor" },
-  { lat: HOME.lat, lon: HOME.lon, sev:"home",    name: "Germantown, MD",note: "Home terminal" },
+  { lat: 32.4279, lon: 53.6880, sev: "critical", name: "Iran",          region: "Islamic Republic of Iran · Middle East", tz:"Asia/Tehran",
+    note: "Nuclear escalation", intel: "Enrichment activity flagged CRITICAL. Strategic facilities under continuous satellite watch; regional deterrence posture elevated." },
+  { lat: 31.0461, lon: 34.8516, sev: "critical", name: "Israel",        region: "State of Israel · Levant", tz:"Asia/Jerusalem",
+    note: "Active conflict zone", intel: "Integrated air-defense network at elevated readiness. Multiple active theaters along northern and southern frontiers." },
+  { lat: 33.8547, lon: 35.8623, sev: "high",     name: "Lebanon",       region: "Lebanese Republic · Levant", tz:"Asia/Beirut",
+    note: "Border tensions", intel: "Border sensor grid reporting cross-boundary movement. Non-state actor activity monitored along the Blue Line." },
+  { lat: 38.9072, lon: -77.0369,sev: "high",     name: "Washington DC", region: "District of Columbia · United States", tz:"America/New_York",
+    note: "Situation room active", intel: "National Situation Room convened. Inter-agency coordination cell active; command-and-control links nominal." },
+  { lat: 40.7128, lon: -74.0060,sev: "watch",    name: "New York, NY",  region: "New York · United States", tz:"America/New_York",
+    note: "Financial systems watch", intel: "Global financial systems nominal. Elevated watch on market infrastructure and undersea cable throughput." },
+  { lat: 34.0522, lon: -118.2437,sev:"watch",    name: "Los Angeles",   region: "California · United States", tz:"America/Los_Angeles",
+    note: "Civil advisory", intel: "Civil advisory in effect. Port and logistics corridors monitored; no elevated kinetic indicators." },
+  { lat: 50.4501, lon: 30.5234, sev: "high",     name: "Kyiv, Ukraine", region: "Ukraine · Eastern Europe", tz:"Europe/Kyiv",
+    note: "Ongoing conflict", intel: "Front-line engagement ongoing. Persistent ISR coverage of contested sectors; infrastructure resilience tracked." },
+  { lat: 24.7136, lon: 46.6753, sev: "watch",    name: "Riyadh",        region: "Saudi Arabia · Arabian Peninsula", tz:"Asia/Riyadh",
+    note: "Diplomatic monitor", intel: "Diplomatic channel monitoring. Energy-corridor stability assessed; posture routine." },
+  { lat: 39.9042, lon: 116.4074,sev: "watch",    name: "Beijing",       region: "People's Republic of China · East Asia", tz:"Asia/Shanghai",
+    note: "Strategic monitor", intel: "Strategic monitoring active. Naval and space-launch cadence tracked; posture routine." },
+  { lat: HOME.lat, lon: HOME.lon, sev:"home",    name: "Germantown, MD",region: "Maryland · United States", tz:"America/New_York",
+    note: "Home terminal", intel: "Operator home terminal. Secure link authenticated. All local systems nominal." },
 ];
 
 /* ============================================================
@@ -282,7 +480,10 @@ const canvas = document.getElementById("globe");
 const ctx = canvas.getContext("2d");
 let W, H, R, cx, cy;
 let rot = 0;                 // rotation (radians) around polar axis
+let spin = true;             // auto-rotation on/off
+let targetRot = null;        // when set, globe eases toward this rotation
 const TILT = -0.41;          // ~23.5° axial tilt
+let selectedMarker = null;   // {lat, lon, name} highlighted after a click
 
 function sizeCanvas() {
   const wrap = canvas.parentElement;
@@ -431,6 +632,31 @@ function drawGlobe() {
     ctx.globalAlpha = 1;
   }
 
+  // Selected-location crosshair (from a click)
+  if (selectedMarker) {
+    const p = project(selectedMarker.lat, selectedMarker.lon);
+    if (p.z >= 0) {
+      const t = Date.now() / 500;
+      const ring = 12 + (Math.sin(t) + 1) * 4;
+      ctx.strokeStyle = "#ffffff"; ctx.lineWidth = 1.4; ctx.globalAlpha = 0.9;
+      ctx.beginPath(); ctx.arc(p.x, p.y, ring, 0, Math.PI*2); ctx.stroke();
+      // rotating tick marks
+      ctx.beginPath();
+      for (let a = 0; a < 4; a++) {
+        const ang = t + a * Math.PI / 2;
+        ctx.moveTo(p.x + Math.cos(ang)*(ring+3), p.y + Math.sin(ang)*(ring+3));
+        ctx.lineTo(p.x + Math.cos(ang)*(ring+9), p.y + Math.sin(ang)*(ring+9));
+      }
+      ctx.stroke();
+      // crosshair
+      ctx.beginPath();
+      ctx.moveTo(p.x - ring - 12, p.y); ctx.lineTo(p.x - ring, p.y);
+      ctx.moveTo(p.x + ring, p.y); ctx.lineTo(p.x + ring + 12, p.y);
+      ctx.stroke();
+      ctx.globalAlpha = 1;
+    }
+  }
+
   // Sweeping scan arc
   const sweep = (Date.now() / 2600) % (Math.PI * 2);
   ctx.save();
@@ -446,11 +672,42 @@ function drawGlobe() {
 }
 
 function animate() {
-  rot += 0.0022;
+  if (targetRot !== null) {
+    // ease toward the target rotation (shortest angular path)
+    let diff = targetRot - rot;
+    while (diff > Math.PI) diff -= Math.PI * 2;
+    while (diff < -Math.PI) diff += Math.PI * 2;
+    rot += diff * 0.08;
+    if (Math.abs(diff) < 0.002) { rot = targetRot; targetRot = null; }
+  } else if (spin) {
+    rot += 0.0022;
+  }
   drawGlobe();
   requestAnimationFrame(animate);
 }
 animate();
+
+/* ---- inverse projection: screen point -> {lat, lon} on front hemisphere ---- */
+function unproject(sx, sy) {
+  const x = (sx - cx) / R;
+  const y2 = (cy - sy) / R;
+  if (x*x + y2*y2 > 1) return null;             // outside the globe disk
+  const z2 = Math.sqrt(Math.max(0, 1 - x*x - y2*y2)); // front hemisphere
+  const cosT = Math.cos(TILT), sinT = Math.sin(TILT);
+  // undo axial tilt (rotation about X by -TILT)
+  const y = y2 * cosT + z2 * sinT;
+  const z = -y2 * sinT + z2 * cosT;
+  const lat = Math.asin(Math.max(-1, Math.min(1, y))) * 180 / Math.PI;
+  let lon = (Math.atan2(x, z) - rot) * 180 / Math.PI;
+  lon = ((lon + 540) % 360) - 180;              // normalize to [-180,180]
+  return { lat, lon };
+}
+
+/* rotate the globe so a given longitude faces front, then hold */
+function focusLon(lon) {
+  targetRot = -lon * Math.PI / 180;
+  spin = false;
+}
 
 /* ============================================================
    CLOCKS
@@ -516,7 +773,7 @@ function renderFeed() {
   const items = [...HOTSPOTS].filter(h => h.sev !== "home")
     .sort((a,b) => order[a.sev]-order[b.sev]);
   document.getElementById("feed").innerHTML = items.map(h => `
-    <div class="row">
+    <div class="row" data-name="${h.name}" style="cursor:pointer;">
       <span class="lv ${h.sev}"></span>
       <span class="loc">${h.name}<small>${h.note}</small></span>
       <span class="sev ${h.sev}">${h.sev.toUpperCase()}</span>
@@ -549,29 +806,57 @@ const WX_CODE = {
   95:["⛈️","Thunderstorm"],96:["⛈️","Storm w/ hail"],99:["⛈️","Severe storm"]
 };
 
-async function loadWeather() {
-  const url = `https://api.open-meteo.com/v1/forecast?latitude=${HOME.lat}&longitude=${HOME.lon}`
+// Reusable fetch for any lat/lon -> normalized weather object (or null)
+async function getWeather(lat, lon) {
+  const url = `https://api.open-meteo.com/v1/forecast?latitude=${lat}&longitude=${lon}`
     + `&current=temperature_2m,relative_humidity_2m,apparent_temperature,precipitation_probability,`
     + `weather_code,wind_speed_10m,uv_index`
-    + `&daily=temperature_2m_max,temperature_2m_min,precipitation_probability_max`
-    + `&temperature_unit=fahrenheit&wind_speed_unit=mph&precipitation_unit=inch`
-    + `&timezone=America%2FNew_York`;
+    + `&daily=temperature_2m_max,temperature_2m_min`
+    + `&temperature_unit=fahrenheit&wind_speed_unit=mph&precipitation_unit=inch&timezone=auto`;
+  const res = await fetch(url);
+  if (!res.ok) throw new Error("HTTP " + res.status);
+  const d = await res.json();
+  const c = d.current, day = d.daily;
+  const code = WX_CODE[c.weather_code] || ["🌐","—"];
+  return {
+    icon: code[0], desc: code[1], tz: d.timezone,
+    temp: Math.round(c.temperature_2m),
+    feels: Math.round(c.apparent_temperature),
+    hum: Math.round(c.relative_humidity_2m),
+    wind: Math.round(c.wind_speed_10m),
+    precip: c.precipitation_probability ?? 0,
+    uv: (c.uv_index ?? 0),
+    hi: Math.round(day.temperature_2m_max[0]),
+    lo: Math.round(day.temperature_2m_min[0]),
+  };
+}
+
+// Reverse geocode any lat/lon -> readable place name (keyless BigDataCloud)
+async function getPlaceName(lat, lon) {
   try {
-    const res = await fetch(url);
-    if (!res.ok) throw new Error("HTTP " + res.status);
+    const res = await fetch(`https://api.bigdatacloud.net/data/reverse-geocode-client?latitude=${lat}&longitude=${lon}&localityLanguage=en`);
+    if (!res.ok) throw 0;
     const d = await res.json();
-    const c = d.current, day = d.daily;
-    const code = WX_CODE[c.weather_code] || ["🌐","—"];
-    document.getElementById("wxIcon").textContent = code[0];
-    document.getElementById("wxDesc").textContent = code[1];
-    document.getElementById("wxTemp").textContent = Math.round(c.temperature_2m) + "°F";
-    document.getElementById("wxFeels").textContent = Math.round(c.apparent_temperature) + "°";
-    document.getElementById("wxHum").textContent = Math.round(c.relative_humidity_2m) + "%";
-    document.getElementById("wxWind").textContent = Math.round(c.wind_speed_10m) + " mph";
-    document.getElementById("wxPrecip").textContent = (c.precipitation_probability ?? 0) + "%";
-    document.getElementById("wxHiLo").textContent =
-      Math.round(day.temperature_2m_max[0]) + "° / " + Math.round(day.temperature_2m_min[0]) + "°";
-    document.getElementById("wxUV").textContent = (c.uv_index ?? 0).toFixed ? c.uv_index.toFixed(1) : c.uv_index;
+    const city = d.city || d.locality || d.principalSubdivision || "";
+    const country = d.countryName || "";
+    if (city && country) return { name: city, region: `${d.principalSubdivision ? d.principalSubdivision + " · " : ""}${country}` };
+    if (country) return { name: country, region: "Ocean / remote region" };
+  } catch (e) {}
+  return null;
+}
+
+async function loadWeather() {
+  try {
+    const w = await getWeather(HOME.lat, HOME.lon);
+    document.getElementById("wxIcon").textContent = w.icon;
+    document.getElementById("wxDesc").textContent = w.desc;
+    document.getElementById("wxTemp").textContent = w.temp + "°F";
+    document.getElementById("wxFeels").textContent = w.feels + "°";
+    document.getElementById("wxHum").textContent = w.hum + "%";
+    document.getElementById("wxWind").textContent = w.wind + " mph";
+    document.getElementById("wxPrecip").textContent = w.precip + "%";
+    document.getElementById("wxHiLo").textContent = w.hi + "° / " + w.lo + "°";
+    document.getElementById("wxUV").textContent = w.uv.toFixed ? w.uv.toFixed(1) : w.uv;
     const now = new Date();
     document.getElementById("wxUpdated").textContent =
       "SYNC " + new Intl.DateTimeFormat("en-GB",{hour:"2-digit",minute:"2-digit",timeZone:"America/New_York"}).format(now);
@@ -586,6 +871,214 @@ loadWeather();
 setInterval(loadWeather, 10 * 60 * 1000); // refresh every 10 min
 
 /* ============================================================
+   INTERACTION — clickable globe + location dossier
+   ============================================================ */
+const detailEl = document.getElementById("detail");
+let currentDetail = null;
+
+function timeIn(tz) {
+  try { return new Intl.DateTimeFormat("en-GB",{hour:"2-digit",minute:"2-digit",second:"2-digit",hour12:false,timeZone:tz}).format(new Date()); }
+  catch (e) { return "—"; }
+}
+function hideDetail() { detailEl.classList.remove("open"); selectedMarker = null; spin = true; currentDetail = null; }
+
+async function openDetail(loc) {
+  currentDetail = loc;
+  selectedMarker = { lat: loc.lat, lon: loc.lon, name: loc.name };
+  focusLon(loc.lon);
+  detailEl.classList.add("open");
+  const sev = loc.sev || "select";
+  document.getElementById("dName").textContent = loc.name;
+  document.getElementById("dRegion").textContent = loc.region || "Resolving coordinates…";
+  document.getElementById("dBadge").innerHTML =
+    `<span class="detail-badge ${sev}">${sev === "select" ? "SCANNED POINT" : sev.toUpperCase()}</span>`;
+  const ns = loc.lat >= 0 ? "N" : "S", ew = loc.lon >= 0 ? "E" : "W";
+  document.getElementById("dCoords").textContent =
+    Math.abs(loc.lat).toFixed(2) + "°" + ns + " · " + Math.abs(loc.lon).toFixed(2) + "°" + ew;
+  document.getElementById("dBrief").textContent = loc.intel || "Analyzing sector… awaiting telemetry.";
+  ["dCond","dTemp","dWind","dHum"].forEach(id => document.getElementById(id).textContent = "…");
+  document.getElementById("dTime").textContent = loc.tz ? timeIn(loc.tz) : "…";
+
+  if (!loc.region) {
+    const place = await getPlaceName(loc.lat, loc.lon);
+    if (currentDetail !== loc) return;
+    if (place) {
+      loc.name = place.name; loc.region = place.region; selectedMarker.name = place.name;
+      document.getElementById("dName").textContent = place.name;
+      document.getElementById("dRegion").textContent = place.region;
+    } else {
+      document.getElementById("dRegion").textContent = "Remote / uncharted sector";
+    }
+  }
+  try {
+    const w = await getWeather(loc.lat, loc.lon);
+    if (currentDetail !== loc) return;
+    loc.tz = loc.tz || w.tz;
+    document.getElementById("dCond").textContent = w.icon + " " + w.desc;
+    document.getElementById("dTemp").textContent = w.temp + "°F (feels " + w.feels + "°)";
+    document.getElementById("dWind").textContent = w.wind + " mph";
+    document.getElementById("dHum").textContent = w.hum + "%";
+    document.getElementById("dTime").textContent = timeIn(loc.tz);
+    if (!loc.intel) {
+      document.getElementById("dBrief").textContent =
+        `Sector scan complete. Local conditions ${w.desc.toLowerCase()}, ${w.temp}°F. No priority threat signature detected at these coordinates.`;
+    }
+  } catch (e) {
+    if (currentDetail !== loc) return;
+    document.getElementById("dCond").textContent = "feed unavailable";
+    document.getElementById("dTemp").textContent = "—";
+  }
+}
+
+// keep dossier clock ticking
+setInterval(() => {
+  if (currentDetail && currentDetail.tz && detailEl.classList.contains("open"))
+    document.getElementById("dTime").textContent = timeIn(currentDetail.tz);
+}, 1000);
+
+document.getElementById("detailClose").addEventListener("click", hideDetail);
+document.getElementById("dFocus").addEventListener("click", () => { if (currentDetail) focusLon(currentDetail.lon); });
+document.getElementById("dAsk").addEventListener("click", () => { if (currentDetail) { openConsole(); askJarvis("brief " + currentDetail.name); } });
+
+// Click / tap anywhere on the globe
+function handleGlobeClick(clientX, clientY) {
+  const rect = canvas.getBoundingClientRect();
+  const mx = clientX - rect.left, my = clientY - rect.top;
+  let best = null, bestD = 18;
+  for (const h of HOTSPOTS) {
+    const p = project(h.lat, h.lon); if (p.z < 0) continue;
+    const d = Math.hypot(p.x - mx, p.y - my);
+    if (d < bestD) { bestD = d; best = h; }
+  }
+  if (best) {
+    openDetail({ lat: best.lat, lon: best.lon, name: best.name, region: best.region, sev: best.sev, intel: best.intel, tz: best.tz });
+    return;
+  }
+  const geo = unproject(mx, my);
+  if (geo) openDetail({ lat: geo.lat, lon: geo.lon, name: "Analyzing sector…", region: null, sev: "select", intel: null, tz: null });
+}
+canvas.addEventListener("click", (e) => handleGlobeClick(e.clientX, e.clientY));
+
+// Threat-feed rows open the matching dossier
+document.getElementById("feed").addEventListener("click", (e) => {
+  const row = e.target.closest(".row"); if (!row) return;
+  const h = HOTSPOTS.find(x => x.name === row.dataset.name);
+  if (h) openDetail({ lat: h.lat, lon: h.lon, name: h.name, region: h.region, sev: h.sev, intel: h.intel, tz: h.tz });
+});
+
+/* ============================================================
+   J.A.R.V.I.S. INTERACTIVE CONSOLE
+   ============================================================ */
+const consoleEl = document.getElementById("console");
+const logEl = document.getElementById("consoleLog");
+let consoleGreeted = false;
+
+function openConsole() {
+  consoleEl.classList.add("open");
+  if (!consoleGreeted) {
+    consoleGreeted = true;
+    const h = new Date().getHours();
+    const part = h < 12 ? "morning" : h < 18 ? "afternoon" : "evening";
+    jarvisSay(`Good ${part}, Operator. J.A.R.V.I.S. online and monitoring <b>${HOTSPOTS.filter(x=>x.sev!=="home").length}</b> global sectors. How can I assist? Type <b>help</b> to see commands.`);
+  }
+  setTimeout(() => document.getElementById("consoleInput").focus(), 300);
+}
+function closeConsole() { consoleEl.classList.remove("open"); }
+
+function appendMsg(who, html) {
+  const div = document.createElement("div");
+  div.className = "msg " + who;
+  div.innerHTML = `<div class="who">${who === "user" ? "OPERATOR" : "J.A.R.V.I.S."}</div><div class="bubble">${html}</div>`;
+  logEl.appendChild(div); logEl.scrollTop = logEl.scrollHeight;
+  return div;
+}
+function jarvisSay(html) { return appendMsg("jarvis", html); }
+
+function findPlace(text) {
+  const t = text.toLowerCase();
+  const alias = {
+    "tehran":"Iran","iran":"Iran","persia":"Iran",
+    "israel":"Israel","jerusalem":"Israel","tel aviv":"Israel",
+    "lebanon":"Lebanon","beirut":"Lebanon",
+    "washington":"Washington DC","d.c":"Washington DC","dc":"Washington DC","capitol":"Washington DC",
+    "new york":"New York, NY","nyc":"New York, NY","manhattan":"New York, NY",
+    "los angeles":"Los Angeles"," la ":"Los Angeles","california":"Los Angeles",
+    "kyiv":"Kyiv, Ukraine","kiev":"Kyiv, Ukraine","ukraine":"Kyiv, Ukraine",
+    "riyadh":"Riyadh","saudi":"Riyadh",
+    "beijing":"Beijing","china":"Beijing",
+    "germantown":"Germantown, MD","maryland":"Germantown, MD","home":"Germantown, MD"
+  };
+  for (const k in alias) { if ((" " + t + " ").includes(k)) return HOTSPOTS.find(h => h.name === alias[k]); }
+  return null;
+}
+
+async function askJarvis(raw) {
+  const text = (raw || "").trim(); if (!text) return;
+  appendMsg("user", text.replace(/</g, "&lt;"));
+  const t = text.toLowerCase();
+  const thinking = jarvisSay("<span style='opacity:.6'>▹ processing…</span>");
+  const set = (html) => { thinking.querySelector(".bubble").innerHTML = html; logEl.scrollTop = logEl.scrollHeight; };
+  await new Promise(r => setTimeout(r, 240));
+
+  if (/^\s*(hi|hello|hey|yo|jarvis)\b/.test(t) || /good (morning|afternoon|evening)/.test(t)) {
+    set("At your service, Operator. Ask me for a <b>sitrep</b>, <b>weather</b>, <b>time</b> in any theater, or say <b>focus &lt;place&gt;</b>."); return;
+  }
+  if (t.includes("help") || t.includes("what can you") || t.includes("command")) {
+    set("Available directives:<br>• <b>status</b> / sitrep — global threat summary<br>• <b>threats</b> — list active sectors<br>• <b>weather [in place]</b> — live conditions<br>• <b>time in [place]</b> — local time<br>• <b>focus [place]</b> — rotate globe &amp; open dossier<br>• <b>brief [place]</b> — intel readout<br>• <b>scan</b> — sweep the grid<br>• <b>clear</b> — reset console"); return;
+  }
+  if (t === "clear" || t === "reset") { logEl.innerHTML = ""; thinking.remove(); return; }
+  if (t.includes("scan")) { set("Initiating full-grid sweep… all sectors nominal except flagged theaters. Standing by."); return; }
+  if (t.includes("who are you") || t.includes("your name")) { set("I am <b>J.A.R.V.I.S.</b> — Just A Rather Very Intelligent System. Global crisis monitor, at your command."); return; }
+
+  if (t.includes("status") || t.includes("sitrep") || t.includes("report") || t.includes("summary")) {
+    const g = s => HOTSPOTS.filter(h => h.sev === s).map(h => h.name);
+    set(`<b>GLOBAL SITREP</b> — DEFCON 3.<br>🔴 CRITICAL (${g("critical").length}): ${g("critical").join(", ")}<br>🟠 HIGH (${g("high").length}): ${g("high").join(", ")}<br>🔵 WATCH (${g("watch").length}): ${g("watch").join(", ")}<br>Home terminal secure. Awaiting orders.`);
+    return;
+  }
+  if (t.includes("threat") || t.includes("hotspot") || t.includes("list") || t.includes("target") || t.includes("sector")) {
+    set(HOTSPOTS.filter(h => h.sev !== "home").map(h => `• <b>${h.name}</b> — ${h.sev.toUpperCase()} · ${h.note}`).join("<br>")); return;
+  }
+  if (t.includes("weather") || t.includes("temperature") || t.includes("forecast") || t.includes("how hot") || t.includes("how cold") || t.includes("raining")) {
+    const place = findPlace(t), loc = place || HOME;
+    try {
+      const w = await getWeather(loc.lat, loc.lon);
+      set(`<b>${loc.name}</b> — ${w.icon} ${w.desc}, <b>${w.temp}°F</b> (feels ${w.feels}°). Wind ${w.wind} mph, humidity ${w.hum}%, today ${w.hi}°/${w.lo}°.`);
+      if (place) openDetail({ lat: place.lat, lon: place.lon, name: place.name, region: place.region, sev: place.sev, intel: place.intel, tz: place.tz });
+    } catch (e) { set("Weather feed for <b>" + loc.name + "</b> is unavailable — the link may be offline."); }
+    return;
+  }
+  if (t.includes("time") || t.includes("clock")) {
+    const place = findPlace(t);
+    if (place) set(`Local time in <b>${place.name}</b> — <b>${timeIn(place.tz)}</b>.`);
+    else set(`Operator local time (Germantown, MD) — <b>${timeIn("America/New_York")}</b>.`);
+    return;
+  }
+  if (/\b(focus|show|go to|goto|center|zoom|locate|find|brief|dossier|about|info on|learn)\b/.test(t)) {
+    const place = findPlace(t);
+    if (place) { openDetail({ lat: place.lat, lon: place.lon, name: place.name, region: place.region, sev: place.sev, intel: place.intel, tz: place.tz }); set(`Re-centering on <b>${place.name}</b>. ${place.intel}`); return; }
+    set("I couldn't identify that location in my registry. Try: Iran, Israel, Lebanon, Washington DC, New York, Kyiv, Riyadh, Beijing, or home."); return;
+  }
+  const place = findPlace(t);
+  if (place) { openDetail({ lat: place.lat, lon: place.lon, name: place.name, region: place.region, sev: place.sev, intel: place.intel, tz: place.tz }); set(`Pulling dossier on <b>${place.name}</b>. ${place.intel}`); return; }
+  set("Unrecognized directive. Type <b>help</b> to see what I can do, Operator.");
+}
+
+document.getElementById("consoleToggle").addEventListener("click", openConsole);
+document.getElementById("consoleClose").addEventListener("click", closeConsole);
+document.getElementById("consoleForm").addEventListener("submit", (e) => {
+  e.preventDefault();
+  const inp = document.getElementById("consoleInput");
+  const v = inp.value; inp.value = ""; askJarvis(v);
+});
+document.getElementById("consoleChips").addEventListener("click", (e) => {
+  const b = e.target.closest("button"); if (b) askJarvis(b.dataset.cmd);
+});
+document.addEventListener("keydown", (e) => {
+  if (e.key === "`") { e.preventDefault(); consoleEl.classList.contains("open") ? closeConsole() : openConsole(); }
+  if (e.key === "Escape") { hideDetail(); closeConsole(); }
+});
+
+/* ============================================================
    TICKER
    ============================================================ */
 const HEADLINES = [
@@ -598,6 +1091,63 @@ const HEADLINES = [
   `GERMANTOWN MD — home terminal secure // operator: authenticated`,
 ];
 document.getElementById("tickerText").textContent = HEADLINES.join("      ✦      ") + "      ✦      ";
+
+/* ============================================================
+   PROGRESSIVE WEB APP — install + offline + auto-update
+   ============================================================ */
+// Register the service worker (enables install + offline launch).
+if ("serviceWorker" in navigator) {
+  window.addEventListener("load", () => {
+    navigator.serviceWorker.register("service-worker.js").then((reg) => {
+      // When a new version is deployed, activate it and reload for fresh content.
+      reg.addEventListener("updatefound", () => {
+        const sw = reg.installing;
+        if (!sw) return;
+        sw.addEventListener("statechange", () => {
+          if (sw.state === "installed" && navigator.serviceWorker.controller) {
+            sw.postMessage("skipWaiting");
+          }
+        });
+      });
+    }).catch(() => {});
+    let reloaded = false;
+    navigator.serviceWorker.addEventListener("controllerchange", () => {
+      if (reloaded) return; reloaded = true; window.location.reload();
+    });
+  });
+}
+
+const installBtn = document.getElementById("installBtn");
+const iosHint = document.getElementById("iosHint");
+const isStandalone = window.matchMedia("(display-mode: standalone)").matches || window.navigator.standalone === true;
+const isIOS = /iphone|ipad|ipod/i.test(navigator.userAgent) && !window.MSStream;
+
+// Android / desktop Chrome: capture the native install prompt.
+let deferredPrompt = null;
+window.addEventListener("beforeinstallprompt", (e) => {
+  e.preventDefault();
+  deferredPrompt = e;
+  if (!isStandalone) installBtn.hidden = false;
+});
+window.addEventListener("appinstalled", () => { installBtn.hidden = true; deferredPrompt = null; });
+
+installBtn.addEventListener("click", async () => {
+  if (deferredPrompt) {
+    deferredPrompt.prompt();
+    await deferredPrompt.userChoice;
+    deferredPrompt = null;
+    installBtn.hidden = true;
+  } else if (isIOS) {
+    iosHint.classList.add("show");
+  }
+});
+document.getElementById("iosHintClose").addEventListener("click", () => iosHint.classList.remove("show"));
+
+// iOS has no install prompt event — surface a manual "how to install" button.
+if (isIOS && !isStandalone) {
+  installBtn.hidden = false;
+  setTimeout(() => iosHint.classList.add("show"), 1600);
+}
 </script>
 </body>
 </html>
