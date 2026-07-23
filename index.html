@@ -268,6 +268,28 @@
     font-family: inherit; font-size: 11px; letter-spacing: 0.16em; padding: 10px 16px; cursor: pointer;
   }
   .console-input button:hover { background: rgba(53,230,255,0.24); }
+  .console-input .mic-btn {
+    padding: 9px 12px; font-size: 15px; border-color: var(--grid); background: rgba(53,230,255,0.06);
+  }
+  .console-input .mic-btn.listening {
+    border-color: var(--red); color: var(--red); background: rgba(255,77,94,0.15);
+    box-shadow: 0 0 14px var(--red); animation: pulse 1s infinite;
+  }
+  .voice-toggle {
+    background: rgba(53,230,255,0.06); border: 1px solid var(--grid); color: #9fdfe9;
+    font-family: inherit; font-size: 10px; letter-spacing: 0.12em; padding: 6px 10px; cursor: pointer;
+  }
+  .voice-toggle.on { border-color: var(--cyan); color: var(--cyan); box-shadow: var(--glow); }
+  /* live-news list inside a dossier */
+  .detail-news { margin-top: 14px; display: flex; flex-direction: column; gap: 8px; }
+  .detail-news .nh {
+    font-size: 11px; line-height: 1.45; color: #cdeff6; text-decoration: none; display: block;
+    border-left: 2px solid var(--amber); padding: 4px 0 4px 10px;
+  }
+  .detail-news .nh:hover { color: var(--amber); }
+  .detail-news .nh small { display: block; color: var(--cyan-dim); font-size: 9px; letter-spacing: 0.1em; margin-top: 2px; }
+  .detail-news .nlabel { font-size: 10px; letter-spacing: 0.2em; color: var(--cyan-dim); display:flex; align-items:center; gap:8px; }
+  .detail-news .nlabel::before { content:""; width:7px; height:7px; border-radius:50%; background:var(--amber); box-shadow:0 0 8px var(--amber); animation: pulse 1.4s infinite; }
   @media (max-width: 700px) {
     .detail-panel { top: auto; bottom: 0; right: 0; left: 0; width: 100%; max-width: 100%; transform: translateY(115%); }
     .detail-panel.open { transform: translateY(0); }
@@ -406,6 +428,7 @@
     <div class="cell"><label>HUMIDITY</label><b id="dHum">—</b></div>
   </div>
   <div class="detail-brief" id="dBrief">Select a point on the globe to begin analysis.</div>
+  <div class="detail-news" id="dNews"></div>
   <div class="detail-actions">
     <button id="dFocus">◎ RE-CENTER</button>
     <button id="dAsk">🛰 ASK J.A.R.V.I.S.</button>
@@ -425,20 +448,25 @@
 <div class="console" id="console">
   <div class="console-head">
     <div class="jtitle"><span class="orb"></span> J.A.R.V.I.S. INTERACTIVE</div>
-    <button class="console-close" id="consoleClose">✕</button>
+    <div style="display:flex; align-items:center; gap:8px;">
+      <button class="voice-toggle" id="voiceToggle" title="Toggle spoken replies">🔇 VOICE OFF</button>
+      <button class="console-close" id="consoleClose">✕</button>
+    </div>
   </div>
   <div class="console-log" id="consoleLog"></div>
   <div class="console-chips" id="consoleChips">
     <button data-cmd="status">Sitrep</button>
     <button data-cmd="threats">List threats</button>
+    <button data-cmd="news in iran">News: Iran</button>
     <button data-cmd="weather">Weather</button>
-    <button data-cmd="time in tehran">Time in Tehran</button>
+    <button data-cmd="time">My time</button>
     <button data-cmd="focus iran">Focus Iran</button>
     <button data-cmd="help">Help</button>
   </div>
   <form class="console-input" id="consoleForm">
     <span class="prompt">›</span>
-    <input id="consoleInput" type="text" autocomplete="off" placeholder="Ask J.A.R.V.I.S. — e.g. 'weather in Israel', 'focus Kyiv', 'status'…">
+    <button type="button" class="mic-btn" id="micBtn" title="Speak to J.A.R.V.I.S.">🎤</button>
+    <input id="consoleInput" type="text" autocomplete="off" placeholder="Ask J.A.R.V.I.S. — speak or type…">
     <button type="submit">SEND</button>
   </form>
 </div>
@@ -724,6 +752,10 @@ const WORLD = [
   { label: "ZULU (UTC)", tz: "UTC" },
 ];
 
+// The clock follows the DEVICE's own timezone (EST/EDT for you in Maryland,
+// or whatever zone the phone/computer is set to anywhere in the world).
+const DEVICE_TZ = Intl.DateTimeFormat().resolvedOptions().timeZone || "America/New_York";
+
 function fmt(d, tz) {
   return new Intl.DateTimeFormat("en-GB", {
     hour: "2-digit", minute: "2-digit", second: "2-digit", hour12: false, timeZone: tz
@@ -732,27 +764,23 @@ function fmt(d, tz) {
 
 function tick() {
   const now = new Date();
-  // Home local time (America/New_York)
-  const t = new Intl.DateTimeFormat("en-GB", {
-    hour: "2-digit", minute: "2-digit", second: "2-digit", hour12: false,
-    timeZone: "America/New_York"
-  }).format(now);
-  document.getElementById("localTime").textContent = t;
+  // Local time — device timezone
+  document.getElementById("localTime").textContent = fmt(now, DEVICE_TZ);
 
   const parts = new Intl.DateTimeFormat("en-US", {
     weekday: "short", day: "2-digit", month: "short", year: "numeric",
-    timeZone: "America/New_York"
+    timeZone: DEVICE_TZ
   }).formatToParts(now);
   const get = ty => (parts.find(p => p.type === ty) || {}).value || "";
   document.getElementById("localDate").textContent =
     `${get("weekday").toUpperCase()} · ${get("day")} ${get("month").toUpperCase()} ${get("year")}`;
 
-  // TZ label (EST/EDT)
-  const tzName = new Intl.DateTimeFormat("en-US", { timeZone:"America/New_York", timeZoneName:"short" })
+  // TZ label (e.g. EST / EDT / GMT+2 — from the device)
+  const tzName = new Intl.DateTimeFormat("en-US", { timeZone: DEVICE_TZ, timeZoneName:"short" })
     .formatToParts(now).find(p=>p.type==="timeZoneName");
-  document.getElementById("tzLabel").textContent = tzName ? tzName.value : "EST";
+  document.getElementById("tzLabel").textContent = tzName ? tzName.value : "LOCAL";
 
-  // world clocks
+  // world clocks (fixed reference zones)
   document.getElementById("worldclocks").innerHTML = WORLD.map(w =>
     `<div class="wc"><span>${w.label}</span><time>${fmt(now, w.tz)}</time></div>`).join("");
 
@@ -845,6 +873,78 @@ async function getPlaceName(lat, lon) {
   return null;
 }
 
+/* ============================================================
+   LIVE NEWS — GDELT global news index (keyless, CORS-enabled)
+   ============================================================ */
+const NEWS_Q = {
+  "Iran": "Iran", "Israel": "Israel", "Lebanon": "Lebanon",
+  "Washington DC": '"White House" OR Congress OR Pentagon',
+  "New York, NY": '"New York"', "Los Angeles": '"Los Angeles"',
+  "Kyiv, Ukraine": "Ukraine", "Riyadh": '"Saudi Arabia"', "Beijing": "China",
+  "Germantown, MD": "Maryland"
+};
+function newsQueryFor(loc) { return loc.q || NEWS_Q[loc.name] || (loc.name || "").replace(/,.*$/, ""); }
+
+function escapeHtml(s) {
+  return (s || "").replace(/[&<>"']/g, c => ({ "&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#39;" }[c]));
+}
+function niceNewsDate(s) { // 20260723T000000Z -> "23 JUL"
+  const m = /^(\d{4})(\d{2})(\d{2})/.exec(s || "");
+  if (!m) return "";
+  return m[3] + " " + ["JAN","FEB","MAR","APR","MAY","JUN","JUL","AUG","SEP","OCT","NOV","DEC"][(+m[2]) - 1];
+}
+// GDELT allows ~1 request / 5s and returns plain text when throttled, so we
+// serialize calls with a >=5.2s gap and cache results for 5 minutes.
+let _gdeltChain = Promise.resolve();
+let _gdeltLast = 0;
+const _newsCache = new Map();
+
+function gdeltThrottled(url) {
+  const p = _gdeltChain.then(async () => {
+    const wait = Math.max(0, 5200 - (Date.now() - _gdeltLast));
+    if (wait) await new Promise(r => setTimeout(r, wait));
+    _gdeltLast = Date.now();
+    try {
+      const res = await fetch(url);
+      const text = await res.text();
+      try { return JSON.parse(text); } catch (e) { return null; } // throttle/error page
+    } catch (e) { return null; }
+  });
+  _gdeltChain = p.catch(() => {});
+  return p;
+}
+
+async function fetchNews(query, max = 5) {
+  const key = query + "|" + max;
+  const hit = _newsCache.get(key);
+  if (hit && Date.now() - hit.t < 5 * 60 * 1000) return hit.v;
+  const url = "https://api.gdeltproject.org/api/v2/doc/doc?query="
+    + encodeURIComponent("(" + query + ") sourcelang:english")
+    + "&mode=artlist&maxrecords=" + max + "&format=json&sort=datedesc&timespan=3d";
+  const d = await gdeltThrottled(url);
+  const items = ((d && d.articles) || [])
+    .map(a => ({ title: a.title, url: a.url, domain: a.domain || "", date: a.seendate || "" }))
+    .filter(a => a.title);
+  if (items.length) _newsCache.set(key, { t: Date.now(), v: items });
+  return items;
+}
+
+// Populate the LIVE NEWS block inside an open dossier.
+function loadDossierNews(loc) {
+  const el = document.getElementById("dNews");
+  el.innerHTML = `<div class="nlabel">LIVE NEWS · SCANNING…</div>`;
+  fetchNews(newsQueryFor(loc), 4).then(items => {
+    if (currentDetail !== loc) return;
+    if (!items.length) {
+      el.innerHTML = `<div class="nlabel">LIVE NEWS</div><div style="font-size:11px;color:var(--cyan-dim)">No live articles retrieved right now.</div>`;
+      return;
+    }
+    el.innerHTML = `<div class="nlabel">LIVE NEWS</div>` + items.map(a =>
+      `<a class="nh" href="${escapeHtml(a.url)}" target="_blank" rel="noopener">${escapeHtml(a.title)}<small>${escapeHtml(a.domain)} · ${niceNewsDate(a.date)}</small></a>`
+    ).join("");
+  });
+}
+
 async function loadWeather() {
   try {
     const w = await getWeather(HOME.lat, HOME.lon);
@@ -859,7 +959,7 @@ async function loadWeather() {
     document.getElementById("wxUV").textContent = w.uv.toFixed ? w.uv.toFixed(1) : w.uv;
     const now = new Date();
     document.getElementById("wxUpdated").textContent =
-      "SYNC " + new Intl.DateTimeFormat("en-GB",{hour:"2-digit",minute:"2-digit",timeZone:"America/New_York"}).format(now);
+      "SYNC " + new Intl.DateTimeFormat("en-GB",{hour:"2-digit",minute:"2-digit",timeZone:DEVICE_TZ}).format(now);
     document.getElementById("locName").textContent = HOME.name;
   } catch (e) {
     document.getElementById("wxUpdated").textContent = "OFFLINE";
@@ -898,6 +998,10 @@ async function openDetail(loc) {
   document.getElementById("dBrief").textContent = loc.intel || "Analyzing sector… awaiting telemetry.";
   ["dCond","dTemp","dWind","dHum"].forEach(id => document.getElementById(id).textContent = "…");
   document.getElementById("dTime").textContent = loc.tz ? timeIn(loc.tz) : "…";
+  document.getElementById("dNews").innerHTML = `<div class="nlabel">LIVE NEWS · SCANNING…</div>`;
+
+  // Known hotspots have a good query immediately; scanned points wait for geocode.
+  if (loc.region) loadDossierNews(loc);
 
   if (!loc.region) {
     const place = await getPlaceName(loc.lat, loc.lon);
@@ -906,8 +1010,10 @@ async function openDetail(loc) {
       loc.name = place.name; loc.region = place.region; selectedMarker.name = place.name;
       document.getElementById("dName").textContent = place.name;
       document.getElementById("dRegion").textContent = place.region;
+      loc.q = place.name; loadDossierNews(loc);
     } else {
       document.getElementById("dRegion").textContent = "Remote / uncharted sector";
+      document.getElementById("dNews").innerHTML = "";
     }
   }
   try {
@@ -1017,14 +1123,18 @@ async function askJarvis(raw) {
   appendMsg("user", text.replace(/</g, "&lt;"));
   const t = text.toLowerCase();
   const thinking = jarvisSay("<span style='opacity:.6'>▹ processing…</span>");
-  const set = (html) => { thinking.querySelector(".bubble").innerHTML = html; logEl.scrollTop = logEl.scrollHeight; };
+  const set = (html) => {
+    thinking.querySelector(".bubble").innerHTML = html;
+    logEl.scrollTop = logEl.scrollHeight;
+    speak(thinking.querySelector(".bubble").textContent);
+  };
   await new Promise(r => setTimeout(r, 240));
 
   if (/^\s*(hi|hello|hey|yo|jarvis)\b/.test(t) || /good (morning|afternoon|evening)/.test(t)) {
     set("At your service, Operator. Ask me for a <b>sitrep</b>, <b>weather</b>, <b>time</b> in any theater, or say <b>focus &lt;place&gt;</b>."); return;
   }
   if (t.includes("help") || t.includes("what can you") || t.includes("command")) {
-    set("Available directives:<br>• <b>status</b> / sitrep — global threat summary<br>• <b>threats</b> — list active sectors<br>• <b>weather [in place]</b> — live conditions<br>• <b>time in [place]</b> — local time<br>• <b>focus [place]</b> — rotate globe &amp; open dossier<br>• <b>brief [place]</b> — intel readout<br>• <b>scan</b> — sweep the grid<br>• <b>clear</b> — reset console"); return;
+    set("Available directives:<br>• <b>status</b> / sitrep — global threat summary<br>• <b>threats</b> — list active sectors<br>• <b>news [in place]</b> — live headlines<br>• <b>weather [in place]</b> — live conditions<br>• <b>time in [place]</b> — local time<br>• <b>focus [place]</b> — rotate globe &amp; open dossier<br>• <b>brief [place]</b> — intel readout<br>• <b>scan</b> — sweep the grid<br>• <b>clear</b> — reset console<br><i>Tip: tap 🎤 to speak, and 🔊 VOICE to hear my replies.</i>"); return;
   }
   if (t === "clear" || t === "reset") { logEl.innerHTML = ""; thinking.remove(); return; }
   if (t.includes("scan")) { set("Initiating full-grid sweep… all sectors nominal except flagged theaters. Standing by."); return; }
@@ -1047,10 +1157,21 @@ async function askJarvis(raw) {
     } catch (e) { set("Weather feed for <b>" + loc.name + "</b> is unavailable — the link may be offline."); }
     return;
   }
+  if (t.includes("news") || t.includes("headline")) {
+    const place = findPlace(t) || HOME;
+    set(`Pulling live headlines for <b>${place.name}</b>…`);
+    const items = await fetchNews(newsQueryFor(place), 4);
+    if (!items.length) { set(`No live headlines retrieved for <b>${place.name}</b> right now.`); return; }
+    set(`<b>LIVE HEADLINES — ${place.name}</b><br>` + items.map(a =>
+      `• <a href="${escapeHtml(a.url)}" target="_blank" rel="noopener" style="color:var(--amber)">${escapeHtml(a.title)}</a> <span style="color:var(--cyan-dim)">(${escapeHtml(a.domain)})</span>`).join("<br>"));
+    if (place !== HOME && place.lat !== undefined)
+      openDetail({ lat: place.lat, lon: place.lon, name: place.name, region: place.region, sev: place.sev, intel: place.intel, tz: place.tz, q: newsQueryFor(place) });
+    return;
+  }
   if (t.includes("time") || t.includes("clock")) {
     const place = findPlace(t);
     if (place) set(`Local time in <b>${place.name}</b> — <b>${timeIn(place.tz)}</b>.`);
-    else set(`Operator local time (Germantown, MD) — <b>${timeIn("America/New_York")}</b>.`);
+    else set(`Your local time — <b>${timeIn(DEVICE_TZ)}</b> (${DEVICE_TZ.replace(/_/g," ")}).`);
     return;
   }
   if (/\b(focus|show|go to|goto|center|zoom|locate|find|brief|dossier|about|info on|learn)\b/.test(t)) {
@@ -1079,7 +1200,76 @@ document.addEventListener("keydown", (e) => {
 });
 
 /* ============================================================
-   TICKER
+   VOICE — speak to J.A.R.V.I.S. (STT) and hear it reply (TTS)
+   ============================================================ */
+let voiceOn = false;
+let jVoice = null;
+
+function pickVoice() {
+  if (!("speechSynthesis" in window)) return;
+  const voices = speechSynthesis.getVoices();
+  if (!voices.length) return;
+  // Prefer a calm English male voice for the J.A.R.V.I.S. feel
+  const pref = ["Daniel", "Google UK English Male", "Arthur", "Microsoft Ryan",
+                "Microsoft Guy", "Google US English", "Samantha"];
+  for (const name of pref) { const v = voices.find(v => v.name.includes(name)); if (v) { jVoice = v; return; } }
+  jVoice = voices.find(v => /^en/i.test(v.lang)) || voices[0];
+}
+if ("speechSynthesis" in window) {
+  pickVoice();
+  speechSynthesis.onvoiceschanged = pickVoice;
+}
+function speak(text) {
+  if (!voiceOn || !("speechSynthesis" in window)) return;
+  const clean = (text || "").replace(/\s+/g, " ").trim();
+  if (!clean) return;
+  speechSynthesis.cancel();
+  const u = new SpeechSynthesisUtterance(clean);
+  if (jVoice) u.voice = jVoice;
+  u.rate = 1.02; u.pitch = 0.9; u.volume = 1;
+  speechSynthesis.speak(u);
+}
+
+const voiceToggle = document.getElementById("voiceToggle");
+voiceToggle.addEventListener("click", () => {
+  voiceOn = !voiceOn;
+  voiceToggle.classList.toggle("on", voiceOn);
+  voiceToggle.textContent = voiceOn ? "🔊 VOICE ON" : "🔇 VOICE OFF";
+  if (voiceOn) { pickVoice(); speak("Voice interface online. How can I assist, Operator?"); }
+  else if ("speechSynthesis" in window) speechSynthesis.cancel();
+});
+
+// Speech recognition — Chrome/Android support it; iOS Safari generally doesn't.
+const SR = window.SpeechRecognition || window.webkitSpeechRecognition;
+const micBtn = document.getElementById("micBtn");
+let recog = null, listening = false;
+if (SR) {
+  recog = new SR();
+  recog.lang = navigator.language || "en-US";
+  recog.interimResults = false;
+  recog.maxAlternatives = 1;
+  recog.onstart = () => { listening = true; micBtn.classList.add("listening"); };
+  recog.onend = () => { listening = false; micBtn.classList.remove("listening"); };
+  recog.onerror = () => { listening = false; micBtn.classList.remove("listening"); };
+  recog.onresult = (e) => {
+    const transcript = e.results[0][0].transcript;
+    document.getElementById("consoleInput").value = transcript;
+    askJarvis(transcript);
+  };
+  micBtn.addEventListener("click", () => {
+    if (!voiceOn) voiceToggle.click();     // enabling via a user gesture also unlocks TTS
+    if (listening) { recog.stop(); return; }
+    try { recog.start(); } catch (e) {}
+  });
+} else {
+  micBtn.addEventListener("click", () => {
+    openConsole();
+    jarvisSay("Live voice input isn't supported in this browser (common on iPhone Safari). You can type your command — and if you enable <b>🔊 VOICE</b>, I'll still speak my replies aloud.");
+  });
+}
+
+/* ============================================================
+   TICKER — live global crisis headlines (GDELT), static fallback
    ============================================================ */
 const HEADLINES = [
   "IRAN — nuclear enrichment activity flagged CRITICAL",
@@ -1090,7 +1280,17 @@ const HEADLINES = [
   "NEW YORK — financial systems nominal, watch maintained",
   `GERMANTOWN MD — home terminal secure // operator: authenticated`,
 ];
-document.getElementById("tickerText").textContent = HEADLINES.join("      ✦      ") + "      ✦      ";
+const tickerEl = document.getElementById("tickerText");
+function setTicker(list) { tickerEl.textContent = list.join("      ✦      ") + "      ✦      "; }
+setTicker(HEADLINES);
+
+async function loadTickerNews() {
+  const items = await fetchNews('Iran OR Israel OR Ukraine OR Lebanon OR "national security" OR crisis', 14);
+  if (!items.length) return; // keep whatever is showing
+  setTicker(items.map(a => `${a.title.toUpperCase()}  —  ${a.domain}`));
+}
+loadTickerNews();
+setInterval(loadTickerNews, 15 * 60 * 1000); // refresh every 15 min
 
 /* ============================================================
    PROGRESSIVE WEB APP — install + offline + auto-update
