@@ -16,9 +16,24 @@ app. It also works offline and auto-updates whenever new changes are deployed.
   dossier with coordinates, local time, live weather and an intel brief
   (unknown points are reverse-geocoded on the fly)
 - 🗣️ **J.A.R.V.I.S. console** — type or tap commands: `status`, `threats`,
-  `weather in Israel`, `time in Tehran`, `focus Kyiv`, `brief Iran`, `help`
-- 🕐 **Live clocks** for your location plus world theaters
+  `news in Iran`, `weather in Israel`, `time in Tehran`, `focus Kyiv`, `help`
+- 🌐 **Ask anything (live web)** — general questions are answered from the live
+  [Wikipedia](https://www.wikipedia.org) API (e.g. “what is quantum computing”,
+  “who is Ada Lovelace”), with built-in math (“15% of 240”) and a web-search
+  fallback (DuckDuckGo/Google/Wikipedia) it opens for anything else
+- 🎙️ **Two-way voice** — tap 🎤 to speak (Chrome/Android); 🔊 VOICE speaks replies
+- 🕐 **Live clocks** — main clock follows the **device's own timezone**
 - ⛅ **Live weather** for Germantown, MD (keyless [Open-Meteo](https://open-meteo.com))
+- 📰 **Live news** from the keyless [GDELT](https://www.gdeltproject.org) index
+
+### About the "ask anything" brain
+J.A.R.V.I.S. reaches the internet through **keyless, browser-accessible APIs**
+(Wikipedia, GDELT news, Open-Meteo weather, BigDataCloud geocoding). It is *not*
+a large language model — a static site can't safely hold a paid AI API key. It
+answers factual questions from Wikipedia and, when it can't answer directly,
+opens a live web search so you can surf to the result yourself. To wire in a
+true conversational LLM you'd add a small backend (or serverless function) that
+holds the API key and proxies requests — happy to set that up if you want it.
 
 ## Install on your phone
 

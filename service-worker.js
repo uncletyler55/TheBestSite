@@ -1,7 +1,7 @@
 /* J.A.R.V.I.S. — service worker
    Caches the app shell so it launches offline and installs as an app.
    Bump CACHE whenever assets change to push an update to installed devices. */
-const CACHE = "jarvis-v2";
+const CACHE = "jarvis-v3";
 const SHELL = [
   "./",
   "./index.html",
@@ -32,13 +32,14 @@ self.addEventListener("fetch", (e) => {
   if (req.method !== "GET") return;
   const url = new URL(req.url);
 
-  // Live data APIs: always go to the network (never serve stale weather).
-  if (url.hostname.includes("open-meteo") || url.hostname.includes("bigdatacloud")) {
-    e.respondWith(fetch(req).catch(() => new Response("{}", { headers: { "Content-Type": "application/json" } })));
+  // Any third-party host (weather, news, geocode, Wikipedia, web lookups, …):
+  // always go straight to the network and never cache — J.A.R.V.I.S. stays live.
+  if (url.origin !== self.location.origin) {
+    e.respondWith(fetch(req).catch(() => new Response("", { status: 503 })));
     return;
   }
 
-  // App shell: network-first so pushed updates land, falling back to cache offline.
+  // App shell (same-origin): network-first so pushed updates land, cache offline.
   e.respondWith(
     fetch(req)
       .then((resp) => {

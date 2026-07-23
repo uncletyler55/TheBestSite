@@ -459,14 +459,14 @@
     <button data-cmd="threats">List threats</button>
     <button data-cmd="news in iran">News: Iran</button>
     <button data-cmd="weather">Weather</button>
+    <button data-cmd="what is the international space station">Ask the web</button>
     <button data-cmd="time">My time</button>
-    <button data-cmd="focus iran">Focus Iran</button>
     <button data-cmd="help">Help</button>
   </div>
   <form class="console-input" id="consoleForm">
     <span class="prompt">›</span>
     <button type="button" class="mic-btn" id="micBtn" title="Speak to J.A.R.V.I.S.">🎤</button>
-    <input id="consoleInput" type="text" autocomplete="off" placeholder="Ask J.A.R.V.I.S. — speak or type…">
+    <input id="consoleInput" type="text" autocomplete="off" placeholder="Ask me anything — speak or type…">
     <button type="submit">SEND</button>
   </form>
 </div>
@@ -1085,7 +1085,7 @@ function openConsole() {
     consoleGreeted = true;
     const h = new Date().getHours();
     const part = h < 12 ? "morning" : h < 18 ? "afternoon" : "evening";
-    jarvisSay(`Good ${part}, Operator. J.A.R.V.I.S. online and monitoring <b>${HOTSPOTS.filter(x=>x.sev!=="home").length}</b> global sectors. How can I assist? Type <b>help</b> to see commands.`);
+    jarvisSay(`Good ${part}, Operator. J.A.R.V.I.S. online, monitoring <b>${HOTSPOTS.filter(x=>x.sev!=="home").length}</b> global sectors and connected to the live web. Ask me anything — or type <b>help</b> for commands.`);
   }
   setTimeout(() => document.getElementById("consoleInput").focus(), 300);
 }
@@ -1118,6 +1118,71 @@ function findPlace(text) {
   return null;
 }
 
+/* ---- Web lookup: strip question phrasing down to the core topic ---- */
+function extractTopic(text) {
+  return text
+    .replace(/^\s*(hey |ok |okay )?(jarvis[,]?\s*)?/i, "")
+    .replace(/^(please\s+)?/i, "")
+    .replace(/^(can|could|would|will)\s+(you|u)\s+/i, "")
+    .replace(/^(search( the web| online| for)?|google|look\s?up|find( me)?|tell me( about)?|give me( info(rmation)? on)?|info(rmation)? on|what('?s| is| are| was| were)|who('?s| is| was| are)|where('?s| is| are)|when( is| was| are)|why( is| are| do| does)|how('?s| is| are| do| does| much| many| tall| far| old| long)?|define|explain|meaning of)\s+/i, "")
+    .replace(/\b(for me|please)\b/gi, "")
+    .replace(/[?!.]+$/,"")
+    .trim();
+}
+
+/* ---- Safe arithmetic evaluator (arithmetic characters only) ---- */
+function tryMath(s) {
+  let e = s.toLowerCase()
+    .replace(/×/g, "*").replace(/÷/g, "/").replace(/\bx\b/g, "*")
+    .replace(/\bplus\b/g, "+").replace(/\bminus\b/g, "-")
+    .replace(/\btimes\b/g, "*").replace(/\bdivided by\b/g, "/");
+  const pm = /(-?\d+(?:\.\d+)?)\s*(?:%|percent)\s*of\s*(-?\d+(?:\.\d+)?)/.exec(e);
+  if (pm) return Math.round(parseFloat(pm[1]) / 100 * parseFloat(pm[2]) * 1e6) / 1e6;
+  if (!/^[\d\s()+\-*/.%]+$/.test(e) || !/[-+*/%]/.test(e)) return null;
+  try {
+    const val = Function('"use strict"; return (' + e + ')')();   // safe: only arithmetic chars reach here
+    if (typeof val === "number" && isFinite(val)) return Math.round(val * 1e6) / 1e6;
+  } catch (err) {}
+  return null;
+}
+
+/* ---- Ask the live web (Wikipedia) for a factual answer ---- */
+async function wikiAnswer(topic) {
+  const t = (topic || "").trim();
+  if (!t) return null;
+  try {
+    const s = await fetch(`https://en.wikipedia.org/w/api.php?action=query&list=search&srsearch=${encodeURIComponent(t)}&srlimit=1&format=json&origin=*`);
+    const sd = await s.json();
+    const hit = sd && sd.query && sd.query.search && sd.query.search[0];
+    if (!hit) return null;
+    const r = await fetch(`https://en.wikipedia.org/api/rest_v1/page/summary/${encodeURIComponent(hit.title)}`);
+    if (!r.ok) return null;
+    const d = await r.json();
+    const url = (d.content_urls && d.content_urls.desktop && d.content_urls.desktop.page)
+      || `https://en.wikipedia.org/wiki/${encodeURIComponent(hit.title)}`;
+    if (d.type === "disambiguation")
+      return { title: d.title, extract: `“${d.title}” could mean several things — try a more specific query.`, url, thumb: null };
+    return { title: d.title, extract: d.extract || "", url, thumb: d.thumbnail ? d.thumbnail.source : null };
+  } catch (e) { return null; }
+}
+
+// The general "surf the web to answer" handler.
+async function webLookup(rawText, set) {
+  const topic = extractTopic(rawText);
+  if (!topic) { set("What would you like me to look up, Operator?"); return; }
+  const m = tryMath(topic);
+  if (m !== null) { set(`<b>${escapeHtml(topic)}</b> = <b>${m}</b>`); return; }
+  set(`Connecting to the web for <b>${escapeHtml(topic)}</b>…`);
+  const a = await wikiAnswer(topic);
+  if (a && a.extract) {
+    const thumb = a.thumb ? `<img src="${escapeHtml(a.thumb)}" alt="" style="float:right;max-width:66px;border:1px solid var(--grid);margin:0 0 6px 10px;">` : "";
+    set(`${thumb}<b>${escapeHtml(a.title)}</b><br>${escapeHtml(a.extract)}<br><a href="${escapeHtml(a.url)}" target="_blank" rel="noopener" style="color:var(--amber)">Source: Wikipedia ↗</a>`);
+    return;
+  }
+  const enc = encodeURIComponent(topic);
+  set(`I couldn't pull a direct answer for <b>${escapeHtml(topic)}</b>. Opening live web search — pick a source:<br>• <a href="https://duckduckgo.com/?q=${enc}" target="_blank" rel="noopener" style="color:var(--amber)">DuckDuckGo ↗</a><br>• <a href="https://www.google.com/search?q=${enc}" target="_blank" rel="noopener" style="color:var(--amber)">Google ↗</a><br>• <a href="https://en.wikipedia.org/w/index.php?search=${enc}" target="_blank" rel="noopener" style="color:var(--amber)">Wikipedia ↗</a>`);
+}
+
 async function askJarvis(raw) {
   const text = (raw || "").trim(); if (!text) return;
   appendMsg("user", text.replace(/</g, "&lt;"));
@@ -1134,7 +1199,7 @@ async function askJarvis(raw) {
     set("At your service, Operator. Ask me for a <b>sitrep</b>, <b>weather</b>, <b>time</b> in any theater, or say <b>focus &lt;place&gt;</b>."); return;
   }
   if (t.includes("help") || t.includes("what can you") || t.includes("command")) {
-    set("Available directives:<br>• <b>status</b> / sitrep — global threat summary<br>• <b>threats</b> — list active sectors<br>• <b>news [in place]</b> — live headlines<br>• <b>weather [in place]</b> — live conditions<br>• <b>time in [place]</b> — local time<br>• <b>focus [place]</b> — rotate globe &amp; open dossier<br>• <b>brief [place]</b> — intel readout<br>• <b>scan</b> — sweep the grid<br>• <b>clear</b> — reset console<br><i>Tip: tap 🎤 to speak, and 🔊 VOICE to hear my replies.</i>"); return;
+    set("Available directives:<br>• <b>ask me anything</b> — I search the live web (e.g. “what is quantum computing”, “who is Ada Lovelace”, “15% of 240”)<br>• <b>status</b> / sitrep — global threat summary<br>• <b>threats</b> — list active sectors<br>• <b>news [in place]</b> — live headlines<br>• <b>weather [in place]</b> — live conditions<br>• <b>time in [place]</b> — local time<br>• <b>focus [place]</b> — rotate globe &amp; open dossier<br>• <b>scan</b> — sweep the grid<br>• <b>clear</b> — reset console<br><i>Tip: tap 🎤 to speak, and 🔊 VOICE to hear my replies.</i>"); return;
   }
   if (t === "clear" || t === "reset") { logEl.innerHTML = ""; thinking.remove(); return; }
   if (t.includes("scan")) { set("Initiating full-grid sweep… all sectors nominal except flagged theaters. Standing by."); return; }
@@ -1174,14 +1239,19 @@ async function askJarvis(raw) {
     else set(`Your local time — <b>${timeIn(DEVICE_TZ)}</b> (${DEVICE_TZ.replace(/_/g," ")}).`);
     return;
   }
-  if (/\b(focus|show|go to|goto|center|zoom|locate|find|brief|dossier|about|info on|learn)\b/.test(t)) {
+  if (/\b(focus|go to|goto|center|zoom|locate|dossier)\b/.test(t)) {
     const place = findPlace(t);
     if (place) { openDetail({ lat: place.lat, lon: place.lon, name: place.name, region: place.region, sev: place.sev, intel: place.intel, tz: place.tz }); set(`Re-centering on <b>${place.name}</b>. ${place.intel}`); return; }
-    set("I couldn't identify that location in my registry. Try: Iran, Israel, Lebanon, Washington DC, New York, Kyiv, Riyadh, Beijing, or home."); return;
+    // no known place — fall through to a live web lookup
   }
+  // A bare hotspot name opens its dossier…
   const place = findPlace(t);
-  if (place) { openDetail({ lat: place.lat, lon: place.lon, name: place.name, region: place.region, sev: place.sev, intel: place.intel, tz: place.tz }); set(`Pulling dossier on <b>${place.name}</b>. ${place.intel}`); return; }
-  set("Unrecognized directive. Type <b>help</b> to see what I can do, Operator.");
+  if (place && /\b(brief|show|about|info|dossier|intel)\b/.test(t)) {
+    openDetail({ lat: place.lat, lon: place.lon, name: place.name, region: place.region, sev: place.sev, intel: place.intel, tz: place.tz });
+    set(`Pulling dossier on <b>${place.name}</b>. ${place.intel}`); return;
+  }
+  // …everything else goes to the live web (Wikipedia + math + search fallback).
+  await webLookup(text, set);
 }
 
 document.getElementById("consoleToggle").addEventListener("click", openConsole);
