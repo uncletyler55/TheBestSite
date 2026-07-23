@@ -4,6 +4,7 @@ name: Deploy J.A.R.V.I.S. to GitHub Pages
 on:
   push:
     branches:
+      - master
       - claude/jarvis-globe-crisis-dashboard-s9qlmq
   workflow_dispatch:
 
